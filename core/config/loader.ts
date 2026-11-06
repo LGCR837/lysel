@@ -1,12 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AccountConfig, GlobalConfig, PluginManifest } from '../types.ts';
-import { PLUGINS_DIR, DATA_DIR, ACCOUNTS_DIR, GLOBAL_CONFIG_PATH, accountConfigPath, accountDir } from './paths.ts';
+import { PLUGINS_DIR, DATA_DIR, ACCOUNTS_DIR, GLOBAL_CONFIG_PATH, accountConfigPath, accountDir, pluginDataDir } from './paths.ts';
 
 export const DEFAULT_GLOBAL: GlobalConfig = {
   logLevel: 'info',
   commandPrefix: '!',
-  webui: { enabled: true, host: '127.0.0.1', port: 7301 },
+  consolePassword: '',
+  webui: { enabled: true, host: '127.0.0.1', port: 7520 },
   plugins: {},
 };
 
@@ -120,6 +121,8 @@ export function resolvePluginConfig(
   );
 }
 
+const EDITABLE_GLOBAL = ['logLevel', 'commandPrefix', 'webui', 'plugins'];
+
 export function updateAccount(id: string, patch: Partial<AccountConfig>): void {
   const current = loadAccount(id);
   if (!current) throw new Error(`账户不存在: ${id}`);
@@ -127,9 +130,41 @@ export function updateAccount(id: string, patch: Partial<AccountConfig>): void {
 }
 
 export function updateGlobal(patch: Record<string, unknown>): GlobalConfig {
-  const next = deepMerge<GlobalConfig>(loadGlobal(), patch);
+  const current = loadGlobal();
+  const safe: Record<string, unknown> = {};
+  for (const key of EDITABLE_GLOBAL) {
+    if (key in patch) safe[key] = patch[key];
+  }
+  const next = deepMerge<GlobalConfig>(current, safe);
+  next.consolePassword = current.consolePassword;
   writeJson(GLOBAL_CONFIG_PATH, next);
   return next;
+}
+
+export function listAccountConfigs(): AccountConfig[] {
+  return listAccountIds()
+    .map((id) => loadAccount(id))
+    .filter((a): a is AccountConfig => a !== null);
+}
+
+export function saveAccountConfig(config: AccountConfig): void {
+  const id = String(config.id ?? '').trim();
+  if (!/^[\w.-]+$/.test(id)) throw new Error('账户 ID 不合法');
+  ensureAccountRuntime(id);
+  writeJson(accountConfigPath(id), config);
+}
+
+export function readPluginUserConfig(accountId: string, name: string): Record<string, unknown> {
+  return readJson<Record<string, unknown>>(path.join(pluginDataDir(accountId, name), 'config.json')) ?? {};
+}
+
+export function savePluginUserConfig(accountId: string, name: string, config: Record<string, unknown>): void {
+  ensurePluginRuntimeDir(accountId, name);
+  writeJson(path.join(pluginDataDir(accountId, name), 'config.json'), config);
+}
+
+function ensurePluginRuntimeDir(accountId: string, name: string): void {
+  fs.mkdirSync(pluginDataDir(accountId, name), { recursive: true });
 }
 
 export function dataDirExists(): boolean {

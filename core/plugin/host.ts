@@ -32,10 +32,10 @@ export class AccountRuntime {
   constructor(
     readonly account: AccountConfig,
     readonly adapter: Adapter,
-    private readonly global: GlobalConfig,
+    private readonly getGlobal: () => GlobalConfig,
   ) {
     this.log = createLogger(`plugin:${account.id}`);
-    this.dispatcher = new Dispatcher(this.router, this.log, () => this.global.commandPrefix);
+    this.dispatcher = new Dispatcher(this.router, this.log, () => this.getGlobal().commandPrefix);
   }
 
   get ref(): AccountRef {
@@ -57,7 +57,7 @@ export class AccountRuntime {
   isEnabled(name: string): boolean {
     const scoped = this.account.plugins?.[name]?.enabled;
     if (typeof scoped === 'boolean') return scoped;
-    const global = this.global.plugins?.[name]?.enabled;
+    const global = this.getGlobal().plugins?.[name]?.enabled;
     return global !== false;
   }
 
@@ -80,7 +80,7 @@ export class AccountRuntime {
     }
 
     const dir = ensurePluginData(this.account.id, name);
-    const config = resolvePluginConfig(name, this.global, this.account, readUserConfig(dir));
+    const config = resolvePluginConfig(name, this.getGlobal(), this.account, readUserConfig(dir));
     const storage = new FileStorage(`${dir}/storage`);
     const log = createLogger(`plugin:${this.account.id}:${name}`);
 
@@ -166,12 +166,12 @@ export class PluginHost {
   private log = createLogger('plugin');
 
   constructor(
-    private readonly global: GlobalConfig,
+    private readonly getGlobal: () => GlobalConfig,
     private readonly manifests: PluginManifest[],
   ) {}
 
   async attach(account: AccountConfig, adapter: Adapter): Promise<AccountRuntime> {
-    const runtime = new AccountRuntime(account, adapter, this.global);
+    const runtime = new AccountRuntime(account, adapter, this.getGlobal);
     this.runtimes.set(account.id, runtime);
     adapter.onMessage((evt) => runtime.dispatch(evt));
     await runtime.mountAll(this.manifests);

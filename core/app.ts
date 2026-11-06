@@ -2,18 +2,24 @@ import { createLogger, setLogLevel, totalErrors } from './log.ts';
 import {
   ensureAccountRuntime,
   ensureLayout,
+  listAccountConfigs,
   listAccountIds,
   listPlugins,
   loadAccount,
   loadGlobal,
   readAccountState,
+  readPluginUserConfig,
+  saveAccountConfig,
+  savePluginUserConfig,
   updateAccount,
+  updateGlobal,
   writeAccountState,
 } from './config/loader.ts';
 import { PluginHost } from './plugin/host.ts';
 import { createAdapter, knownPlatforms } from './adapters/registry.ts';
 import { startWebUi } from './webui/server.ts';
-import type { AccountConfig, Adapter, GlobalConfig, PluginManifest } from './types.ts';
+import { VERSION } from './version.ts';
+import type { AccountConfig, Adapter, GlobalConfig, MessageEvent, PluginManifest } from './types.ts';
 
 export class App {
   private log = createLogger('app');
@@ -32,7 +38,7 @@ export class App {
     if (created) this.log.info('已生成 data/bot.json');
 
     this.manifests = listPlugins();
-    this.host = new PluginHost(this.global, this.manifests);
+    this.host = new PluginHost(() => this.global, this.manifests);
 
     const ids = listAccountIds();
     if (ids.length === 0) {
@@ -60,20 +66,24 @@ export class App {
       this.accounts.set(id, account);
       this.adapters.set(id, adapter);
       await this.host.attach(account, adapter);
-      adapter.onMessage(() => {
+      adapter.onMessage((evt) => {
         this.messages++;
+        this.builtinCommand(adapter, evt);
       });
-      try {
-        void adapter.start().catch((e: any) => this.log.error(`${id} 启动失败`, e?.message ?? e));
-      } catch (e: any) {
-        this.log.error(`${id} 启动失败`, e?.message ?? e);
-      }
+      void adapter.start().catch((e: any) => this.log.error(`${id} 启动失败`, e?.message ?? e));
     }
 
     if (this.global.webui.enabled) {
       startWebUi(this.global.webui.host, this.global.webui.port, {
         status: () => this.snapshot(),
-        toggle: (accountId, name, enabled) => this.togglePlugin(accountId, name, enabled),
+        config: () => this.configForWeb(),
+        toggle: (a, n, e) => this.togglePlugin(a, n, e),
+        saveGlobal: (patch) => this.updateGlobalFromWeb(patch),
+        saveAccount: (cfg) => this.saveAccountFromWeb(cfg),
+        accountState: (id, running) => this.setAccountRunning(id, running),
+        pluginConfig: (a, n) => this.getPluginConfig(a, n),
+        savePluginConfig: (a, n, c) => this.setPluginConfig(a, n, c),
+        checkKey: (key) => this.checkKey(key),
       });
     }
   }
@@ -82,6 +92,7 @@ export class App {
     const mem = process.memoryUsage();
     return {
       at: Date.now(),
+      version: VERSION,
       uptime: Date.now() - this.startedAt,
       node: process.version,
       os: `${process.platform} ${process.arch}`,
@@ -89,7 +100,7 @@ export class App {
         rss: Math.round(mem.rss / 1048576),
         heapUsed: Math.round(mem.heapUsed / 1048576),
       },
-      config: this.global,
+      config: this.publicGlobal(),
       stats: { messages: this.messages, errors: totalErrors() },
       accounts: [...this.accounts.values()].map((a) => {
         const adapter = this.adapters.get(a.id);
@@ -114,6 +125,52 @@ export class App {
         })),
       })),
     };
+  }
+
+  configForWeb() {
+    return { global: this.publicGlobal(), accounts: listAccountConfigs() };
+  }
+
+  checkKey(key: string | undefined): boolean {
+    const password = this.global.consolePassword;
+    return !password || key === password;
+  }
+
+  updateGlobalFromWeb(patch: Record<string, unknown>): boolean {
+    this.global = updateGlobal(patch);
+    setLogLevel(this.global.logLevel);
+    this.log.info('全局配置已更新');
+    return true;
+  }
+
+  saveAccountFromWeb(raw: AccountConfig): boolean {
+    if (!raw || !raw.id || !raw.platform) return false;
+    saveAccountConfig(raw);
+    const loaded = this.accounts.get(raw.id);
+    if (loaded) Object.assign(loaded, raw);
+    this.log.info(`账户配置已保存 ${raw.id}`);
+    return true;
+  }
+
+  async setAccountRunning(id: string, running: boolean): Promise<boolean> {
+    const adapter = this.adapters.get(id);
+    if (!adapter) return false;
+    if (running) void adapter.start().catch((e: any) => this.log.error(`${id} 启动失败`, e?.message ?? e));
+    else await adapter.stop();
+    this.log.info(`${id} 已${running ? '启动' : '停止'}`);
+    return true;
+  }
+
+  getPluginConfig(accountId: string, name: string): Record<string, unknown> {
+    return readPluginUserConfig(accountId, name);
+  }
+
+  async setPluginConfig(accountId: string, name: string, config: Record<string, unknown>): Promise<boolean> {
+    savePluginUserConfig(accountId, name, config);
+    const runtime = this.host.get(accountId);
+    if (runtime) await runtime.reload(name);
+    this.log.info(`${accountId} / ${name} 配置已更新`);
+    return true;
   }
 
   async togglePlugin(accountId: string, name: string, enabled: boolean): Promise<boolean> {
@@ -141,5 +198,24 @@ export class App {
     }
     await this.host.stopAll();
     this.log.info('已停止');
+  }
+
+  private publicGlobal(): Omit<GlobalConfig, 'consolePassword'> {
+    const { consolePassword, ...rest } = this.global;
+    return rest;
+  }
+
+  private builtinCommand(adapter: Adapter, evt: MessageEvent): void {
+    if (evt.text !== '#lysel' && evt.text !== '#Lysel') return;
+    const reply = `Lysel ${VERSION}\n运行时间 ${this.formatUptime()}`;
+    void adapter.send({ scene: evt.scene, id: evt.peerId }, [{ type: 'text', text: reply }]).catch((e: any) =>
+      this.log.error('内置命令回复失败', e?.message ?? e),
+    );
+  }
+
+  private formatUptime(): string {
+    const s = Math.floor((Date.now() - this.startedAt) / 1000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
   }
 }

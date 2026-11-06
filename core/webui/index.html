@@ -110,6 +110,20 @@
       <p class="section-heading__index">02 / ADAPTERS</p>
       <div class="section-heading__main"><h2>账户 <span>ACCOUNTS</span></h2><i class="section-heading__line"></i></div>
     </div>
+    <div class="section-tools">
+      <button class="button" id="new-account"><span class="button__inner"><span>新增账户</span><span class="button__arrow">＋</span></span></button>
+    </div>
+    <div class="panel editor-panel" id="account-editor" hidden>
+      <div class="panel__head"><h3 id="account-editor-title">账户配置</h3><span>account.json</span></div>
+      <div class="editor-body">
+        <textarea class="json-editor" id="account-json" spellcheck="false"></textarea>
+        <div class="form-actions">
+          <button class="button" id="save-account"><span class="button__inner"><span>保存</span><span class="button__arrow">↗</span></span></button>
+          <button class="button button--ghost" id="cancel-account"><span class="button__inner"><span>取消</span><span class="button__arrow">×</span></span></button>
+          <span class="hint" id="account-hint"></span>
+        </div>
+      </div>
+    </div>
     <div class="card-grid" id="account-cards"></div>
   </section>
 
@@ -118,10 +132,8 @@
       <p class="section-heading__index">03 / PLUGINS</p>
       <div class="section-heading__main"><h2>插件 <span>PLUGINS</span></h2><i class="section-heading__line"></i></div>
     </div>
-    <div class="panel">
-      <div class="panel__head"><h3>已安装</h3><span id="plugin-count">0 PLUGINS</span></div>
-      <div class="table-wrap"><table class="data-table"><thead><tr><th>名称</th><th>版本</th><th>说明</th><th>账户开关</th></tr></thead><tbody id="plugin-rows"></tbody></table></div>
-    </div>
+    <div class="tabs" id="plugin-tabs"></div>
+    <div class="card-grid" id="plugin-cards"></div>
   </section>
 
   <section class="view" data-panel="logs">
@@ -140,9 +152,34 @@
       <p class="section-heading__index">05 / CONFIG</p>
       <div class="section-heading__main"><h2>设置 <span>SETTINGS</span></h2><i class="section-heading__line"></i></div>
     </div>
+    <div class="section-tools">
+      <button class="button button--ghost" id="edit-global-json"><span class="button__inner"><span>完整配置</span><span class="button__arrow">↗</span></span></button>
+    </div>
+    <div class="panel editor-panel" id="global-editor" hidden>
+      <div class="panel__head"><h3>完整配置</h3><span>bot.json</span></div>
+      <div class="editor-body">
+        <textarea class="json-editor" id="global-json" spellcheck="false"></textarea>
+        <div class="form-actions">
+          <button class="button" id="save-global-json"><span class="button__inner"><span>保存</span><span class="button__arrow">↗</span></span></button>
+          <button class="button button--ghost" id="cancel-global-json"><span class="button__inner"><span>取消</span><span class="button__arrow">×</span></span></button>
+          <span class="hint" id="global-json-hint"></span>
+        </div>
+      </div>
+    </div>
     <div class="panel">
       <div class="panel__head"><h3>全局配置</h3><span>bot.json</span></div>
-      <div class="facts facts--stack" id="settings-facts"></div>
+      <div class="form-grid">
+        <label class="field"><span>日志级别</span><select id="cfg-logLevel"><option value="debug">debug</option><option value="info">info</option><option value="warn">warn</option><option value="error">error</option></select></label>
+        <label class="field"><span>命令前缀</span><input id="cfg-commandPrefix" type="text"></label>
+        <label class="field"><span>WebUI</span><select id="cfg-webuiEnabled"><option value="true">启用</option><option value="false">停用</option></select></label>
+        <label class="field"><span>监听地址</span><input id="cfg-host" type="text"></label>
+        <label class="field"><span>端口</span><input id="cfg-port" type="number"></label>
+        <label class="field"><span>控制台密钥</span><input id="cfg-key" type="password" autocomplete="off"></label>
+      </div>
+      <div class="form-actions">
+        <button class="button" id="save-global"><span class="button__inner"><span>保存</span><span class="button__arrow">↗</span></span></button>
+        <span class="hint" id="global-hint"></span>
+      </div>
     </div>
     <p class="section-lead" id="settings-note"></p>
   </section>

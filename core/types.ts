@@ -119,6 +119,7 @@ export interface PluginManifest {
 export interface GlobalConfig {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   commandPrefix: string;
+  consolePassword: string;
   webui: { enabled: boolean; host: string; port: number };
   plugins: Record<string, Record<string, unknown>>;
 }

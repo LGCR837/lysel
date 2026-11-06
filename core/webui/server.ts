@@ -9,7 +9,14 @@ const WEBUI_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 export interface WebUiDeps {
   status: () => unknown;
+  config: () => unknown;
   toggle: (accountId: string, name: string, enabled: boolean) => Promise<boolean>;
+  saveGlobal: (patch: Record<string, unknown>) => boolean;
+  saveAccount: (config: any) => boolean;
+  accountState: (id: string, running: boolean) => Promise<boolean>;
+  pluginConfig: (accountId: string, name: string) => unknown;
+  savePluginConfig: (accountId: string, name: string, config: Record<string, unknown>) => Promise<boolean>;
+  checkKey: (key: string | undefined) => boolean;
 }
 
 const pages: Record<string, { file: string; type: string }> = {
@@ -40,6 +47,15 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
+async function jsonBody(req: http.IncomingMessage): Promise<Record<string, any>> {
+  try {
+    const parsed = JSON.parse((await readBody(req)) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function serveAsset(res: http.ServerResponse, name: string): void {
   const file = path.join(WEBUI_DIR, 'assets', path.basename(name));
   if (!fs.existsSync(file)) {
@@ -62,9 +78,48 @@ export function startWebUi(host: string, port: number, deps: WebUiDeps): http.Se
       sendJson(res, { lines: getLogs() });
       return;
     }
+
+    if (pathname.startsWith('/api/config') || pathname.startsWith('/api/accounts') || pathname.startsWith('/api/plugins')) {
+      if (!deps.checkKey(req.headers['x-console-key'] as string | undefined)) {
+        sendJson(res, { ok: false, message: '密钥不正确' }, 403);
+        return;
+      }
+    }
+
+    if (pathname === '/api/config' && req.method === 'GET') {
+      sendJson(res, deps.config());
+      return;
+    }
+    if (pathname === '/api/config/global' && req.method === 'PUT') {
+      const body = await jsonBody(req);
+      sendJson(res, { ok: deps.saveGlobal(body) });
+      return;
+    }
+    if (pathname === '/api/config/account' && req.method === 'PUT') {
+      const body = await jsonBody(req);
+      sendJson(res, { ok: deps.saveAccount(body) });
+      return;
+    }
+    if (pathname === '/api/accounts/state' && req.method === 'POST') {
+      const body = await jsonBody(req);
+      const ok = await deps.accountState(String(body.accountId ?? ''), Boolean(body.running));
+      sendJson(res, { ok }, ok ? 200 : 400);
+      return;
+    }
+    if (pathname === '/api/plugins/config' && req.method === 'GET') {
+      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
+      sendJson(res, { config: deps.pluginConfig(url.searchParams.get('accountId') ?? '', url.searchParams.get('name') ?? '') });
+      return;
+    }
+    if (pathname === '/api/plugins/config' && req.method === 'PUT') {
+      const body = await jsonBody(req);
+      const ok = await deps.savePluginConfig(String(body.accountId ?? ''), String(body.name ?? ''), body.config ?? {});
+      sendJson(res, { ok }, ok ? 200 : 400);
+      return;
+    }
     if (pathname === '/api/plugins/toggle' && req.method === 'POST') {
       try {
-        const body = JSON.parse((await readBody(req)) || '{}');
+        const body = await jsonBody(req);
         const ok = await deps.toggle(String(body.accountId ?? ''), String(body.name ?? ''), Boolean(body.enabled));
         sendJson(res, { ok }, ok ? 200 : 400);
       } catch (e: any) {
