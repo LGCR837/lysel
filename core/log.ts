@@ -2,12 +2,28 @@ import type { Logger } from './types.ts';
 
 type Level = 'debug' | 'info' | 'warn' | 'error';
 
+export interface LogLine {
+  time: string;
+  level: Level;
+  scope: string;
+  text: string;
+}
+
 const weight: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+const history: LogLine[] = [];
 
 let threshold = weight.info;
 
 export function setLogLevel(level: Level): void {
   threshold = weight[level] ?? weight.info;
+}
+
+export function getLogs(): LogLine[] {
+  return [...history];
+}
+
+export function totalErrors(): number {
+  return history.filter((l) => l.level === 'error').length;
 }
 
 function emit(level: Level, scope: string, args: unknown[]): void {
@@ -16,6 +32,8 @@ function emit(level: Level, scope: string, args: unknown[]): void {
   const line = args
     .map((a) => (typeof a === 'string' ? a : a instanceof Error ? a.message : JSON.stringify(a)))
     .join(' ');
+  history.push({ time: ts, level, scope, text: line });
+  if (history.length > 300) history.shift();
   const text = `${ts} ${level.toUpperCase().padEnd(5)} [${scope}] ${line}`;
   if (level === 'error') console.error(text);
   else if (level === 'warn') console.warn(text);

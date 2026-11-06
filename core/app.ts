@@ -1,4 +1,4 @@
-import { createLogger, setLogLevel } from './log.ts';
+import { createLogger, setLogLevel, totalErrors } from './log.ts';
 import {
   ensureAccountRuntime,
   ensureLayout,
@@ -7,6 +7,7 @@ import {
   loadAccount,
   loadGlobal,
   readAccountState,
+  updateAccount,
   writeAccountState,
 } from './config/loader.ts';
 import { PluginHost } from './plugin/host.ts';
@@ -22,6 +23,7 @@ export class App {
   host!: PluginHost;
   adapters = new Map<string, Adapter>();
   accounts = new Map<string, AccountConfig>();
+  private messages = 0;
 
   async start(): Promise<void> {
     const { created } = ensureLayout();
@@ -58,38 +60,77 @@ export class App {
       this.accounts.set(id, account);
       this.adapters.set(id, adapter);
       await this.host.attach(account, adapter);
+      adapter.onMessage(() => {
+        this.messages++;
+      });
       try {
-        await adapter.start();
+        void adapter.start().catch((e: any) => this.log.error(`${id} 启动失败`, e?.message ?? e));
       } catch (e: any) {
         this.log.error(`${id} 启动失败`, e?.message ?? e);
       }
     }
 
     if (this.global.webui.enabled) {
-      startWebUi(this.global.webui.host, this.global.webui.port, () => this.snapshot());
+      startWebUi(this.global.webui.host, this.global.webui.port, {
+        status: () => this.snapshot(),
+        toggle: (accountId, name, enabled) => this.togglePlugin(accountId, name, enabled),
+      });
     }
   }
 
   snapshot() {
+    const mem = process.memoryUsage();
     return {
+      at: Date.now(),
       uptime: Date.now() - this.startedAt,
+      node: process.version,
+      os: `${process.platform} ${process.arch}`,
+      memory: {
+        rss: Math.round(mem.rss / 1048576),
+        heapUsed: Math.round(mem.heapUsed / 1048576),
+      },
+      config: this.global,
+      stats: { messages: this.messages, errors: totalErrors() },
       accounts: [...this.accounts.values()].map((a) => {
         const adapter = this.adapters.get(a.id);
-        const status = adapter ? (adapter as any).status?.() : undefined;
+        const runtime = this.host.get(a.id);
         return {
           id: a.id,
           platform: a.platform,
           label: a.label ?? a.id,
-          online: Boolean(status?.online),
+          online: Boolean(adapter?.status().online),
           selfId: adapter?.selfId ?? '',
+          pluginCount: runtime?.list().length ?? 0,
+          commandCount: runtime?.router.commandNames().length ?? 0,
         };
       }),
       plugins: this.manifests.map((m) => ({
         name: m.name,
         version: m.version,
         description: m.description ?? '',
+        enabled: [...this.accounts.values()].map((a) => ({
+          accountId: a.id,
+          enabled: Boolean(this.host.get(a.id)?.isEnabled(m.name)),
+        })),
       })),
     };
+  }
+
+  async togglePlugin(accountId: string, name: string, enabled: boolean): Promise<boolean> {
+    const account = this.accounts.get(accountId);
+    const runtime = this.host.get(accountId);
+    const manifest = this.manifests.find((m) => m.name === name);
+    if (!account || !runtime || !manifest) return false;
+
+    const plugins = { ...(account.plugins ?? {}) };
+    plugins[name] = { ...(plugins[name] ?? {}), enabled };
+    account.plugins = plugins;
+    updateAccount(accountId, { plugins });
+
+    if (enabled) await runtime.mount(manifest);
+    else await runtime.unmount(name);
+    this.log.info(`${accountId} / ${name} 已${enabled ? '启用' : '停用'}`);
+    return true;
   }
 
   async stop(): Promise<void> {

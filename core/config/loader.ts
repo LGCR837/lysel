@@ -120,6 +120,18 @@ export function resolvePluginConfig(
   );
 }
 
+export function updateAccount(id: string, patch: Partial<AccountConfig>): void {
+  const current = loadAccount(id);
+  if (!current) throw new Error(`账户不存在: ${id}`);
+  writeJson(accountConfigPath(id), deepMerge(current, patch));
+}
+
+export function updateGlobal(patch: Record<string, unknown>): GlobalConfig {
+  const next = deepMerge<GlobalConfig>(loadGlobal(), patch);
+  writeJson(GLOBAL_CONFIG_PATH, next);
+  return next;
+}
+
 export function dataDirExists(): boolean {
   return fs.existsSync(DATA_DIR);
 }

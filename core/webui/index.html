@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lysel</title>
+<link rel="stylesheet" href="/webui.css">
+</head>
+<body>
+<div class="site-background" aria-hidden="true">
+  <div class="site-background__drift">
+    <picture class="site-background__picture">
+      <source media="(max-width: 760px)" srcset="/assets/hoshino-wallpaper-1280.webp">
+      <img class="site-background__image" src="/assets/hoshino-wallpaper-1920.webp" alt="">
+    </picture>
+  </div>
+  <div class="site-background__shade"></div>
+</div>
+
+<div class="top-line" aria-hidden="true"><span></span></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar__brand">
+    <div class="wordmark">LYSEL<span>.</span></div>
+    <div class="sidebar__version">MULTI PLATFORM BOT FRAMEWORK</div>
+  </div>
+
+  <nav class="sidebar__nav" aria-label="主导航">
+    <a href="#dashboard" data-view="dashboard" class="is-active"><span class="nav__number">01</span><span class="nav__label">概览</span><span class="nav__en">DASHBOARD</span></a>
+    <a href="#accounts" data-view="accounts"><span class="nav__number">02</span><span class="nav__label">账户</span><span class="nav__en">ACCOUNTS</span></a>
+    <a href="#plugins" data-view="plugins"><span class="nav__number">03</span><span class="nav__label">插件</span><span class="nav__en">PLUGINS</span></a>
+    <a href="#logs" data-view="logs"><span class="nav__number">04</span><span class="nav__label">日志</span><span class="nav__en">LOGS</span></a>
+    <a href="#settings" data-view="settings"><span class="nav__number">05</span><span class="nav__label">设置</span><span class="nav__en">SETTINGS</span></a>
+  </nav>
+
+  <div class="sidebar__foot">
+    <div class="side-status"><span class="dot" id="side-dot"></span><span id="side-status-text">连接中</span></div>
+    <div class="sidebar__meta">DEEP BLUE / PINK / LYSEL</div>
+  </div>
+</aside>
+
+<header class="topbar">
+  <div class="topbar__title">
+    <p class="topbar__eyebrow" id="view-en">DASHBOARD</p>
+    <h1 id="view-title">概览</h1>
+  </div>
+  <div class="topbar__right">
+    <div class="uptime"><span class="uptime__label">运行</span><span id="uptime-value">00:00:00</span></div>
+    <button class="button" id="refresh-button"><span class="button__inner"><span>刷新</span><span class="button__arrow">↻</span></span></button>
+  </div>
+</header>
+
+<main class="main" id="main">
+
+  <section class="view is-active" data-panel="dashboard">
+    <div class="section-heading reveal">
+      <p class="section-heading__index">01 / OVERVIEW</p>
+      <div class="section-heading__main">
+        <h2>运行状态 <span>LIVE STATUS</span></h2>
+        <i class="section-heading__line"></i>
+      </div>
+    </div>
+
+    <div class="metric-grid">
+      <article class="metric reveal" data-delay="1">
+        <div class="metric__top"><span class="metric__label">运行时长</span><span class="metric__en">UPTIME</span></div>
+        <div class="metric__main"><strong id="m-uptime">00:00:00</strong></div>
+        <div class="metric__detail" id="m-uptime-detail">自启动以来</div>
+        <div class="metric__bottom"><span>PROCESS</span><span>●</span></div>
+      </article>
+      <article class="metric reveal" data-delay="2">
+        <div class="metric__top"><span class="metric__label">账户</span><span class="metric__en">ACCOUNTS</span></div>
+        <div class="metric__main"><strong id="m-accounts">0</strong><span class="metric__unit">个</span></div>
+        <div class="metric__detail" id="m-accounts-detail">已配置</div>
+        <div class="metric__bottom"><span>ADAPTERS</span><span>●</span></div>
+      </article>
+      <article class="metric reveal" data-delay="3">
+        <div class="metric__top"><span class="metric__label">在线</span><span class="metric__en">ONLINE</span></div>
+        <div class="metric__main"><strong id="m-online">0</strong><span class="metric__unit">个</span></div>
+        <div class="metric__detail" id="m-online-detail">连接正常</div>
+        <div class="metric__bottom"><span>CONNECTED</span><span>●</span></div>
+      </article>
+      <article class="metric reveal" data-delay="4">
+        <div class="metric__top"><span class="metric__label">插件</span><span class="metric__en">PLUGINS</span></div>
+        <div class="metric__main"><strong id="m-plugins">0</strong><span class="metric__unit">个</span></div>
+        <div class="metric__detail" id="m-plugins-detail">已发现</div>
+        <div class="metric__bottom"><span>INSTALLED</span><span>●</span></div>
+      </article>
+    </div>
+
+    <div class="split-grid">
+      <article class="panel reveal" data-delay="5">
+        <div class="panel__head"><h3>账户</h3><span>ACCOUNTS</span></div>
+        <div class="panel__body" id="dash-accounts"></div>
+      </article>
+      <article class="panel reveal" data-delay="6">
+        <div class="panel__head"><h3>插件</h3><span>PLUGINS</span></div>
+        <div class="panel__body" id="dash-plugins"></div>
+      </article>
+    </div>
+
+    <article class="panel panel--wide reveal" data-delay="7">
+      <div class="panel__head"><h3>环境</h3><span>ENVIRONMENT</span></div>
+      <div class="facts" id="dash-env"></div>
+    </article>
+  </section>
+
+  <section class="view" data-panel="accounts">
+    <div class="section-heading reveal">
+      <p class="section-heading__index">02 / ADAPTERS</p>
+      <div class="section-heading__main"><h2>账户 <span>ACCOUNTS</span></h2><i class="section-heading__line"></i></div>
+    </div>
+    <div class="card-grid" id="account-cards"></div>
+  </section>
+
+  <section class="view" data-panel="plugins">
+    <div class="section-heading reveal">
+      <p class="section-heading__index">03 / PLUGINS</p>
+      <div class="section-heading__main"><h2>插件 <span>PLUGINS</span></h2><i class="section-heading__line"></i></div>
+    </div>
+    <div class="panel">
+      <div class="panel__head"><h3>已安装</h3><span id="plugin-count">0 PLUGINS</span></div>
+      <div class="table-wrap"><table class="data-table"><thead><tr><th>名称</th><th>版本</th><th>说明</th><th>账户开关</th></tr></thead><tbody id="plugin-rows"></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="view" data-panel="logs">
+    <div class="section-heading reveal">
+      <p class="section-heading__index">04 / OUTPUT</p>
+      <div class="section-heading__main"><h2>日志 <span>LOGS</span></h2><i class="section-heading__line"></i></div>
+    </div>
+    <div class="panel">
+      <div class="panel__head"><h3>实时输出</h3><span id="log-count">0 LINES</span></div>
+      <div class="terminal" id="terminal"></div>
+    </div>
+  </section>
+
+  <section class="view" data-panel="settings">
+    <div class="section-heading reveal">
+      <p class="section-heading__index">05 / CONFIG</p>
+      <div class="section-heading__main"><h2>设置 <span>SETTINGS</span></h2><i class="section-heading__line"></i></div>
+    </div>
+    <div class="panel">
+      <div class="panel__head"><h3>全局配置</h3><span>bot.json</span></div>
+      <div class="facts facts--stack" id="settings-facts"></div>
+    </div>
+    <p class="section-lead" id="settings-note"></p>
+  </section>
+
+</main>
+
+<script src="/webui.js"></script>
+</body>
+</html>
