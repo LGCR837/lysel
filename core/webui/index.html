@@ -115,13 +115,11 @@
     </div>
     <div class="panel editor-panel" id="account-editor" hidden>
       <div class="panel__head"><h3 id="account-editor-title">账户配置</h3><span>account.json</span></div>
-      <div class="editor-body">
-        <textarea class="json-editor" id="account-json" spellcheck="false"></textarea>
-        <div class="form-actions">
-          <button class="button" id="save-account"><span class="button__inner"><span>保存</span><span class="button__arrow">↗</span></span></button>
-          <button class="button button--ghost" id="cancel-account"><span class="button__inner"><span>取消</span><span class="button__arrow">×</span></span></button>
-          <span class="hint" id="account-hint"></span>
-        </div>
+      <div class="form-grid form-grid--account" id="account-fields"></div>
+      <div class="form-actions">
+        <button class="button" id="save-account"><span class="button__inner"><span>保存</span><span class="button__arrow">↗</span></span></button>
+        <button class="button button--ghost" id="cancel-account"><span class="button__inner"><span>取消</span><span class="button__arrow">×</span></span></button>
+        <span class="hint" id="account-hint"></span>
       </div>
     </div>
     <div class="card-grid" id="account-cards"></div>

@@ -108,7 +108,7 @@ export function startWebUi(host: string, port: number, deps: WebUiDeps): http.Se
     }
     if (pathname === '/api/plugins/config' && req.method === 'GET') {
       const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-      sendJson(res, { config: deps.pluginConfig(url.searchParams.get('accountId') ?? '', url.searchParams.get('name') ?? '') });
+      sendJson(res, deps.pluginConfig(url.searchParams.get('accountId') ?? '', url.searchParams.get('name') ?? '') as object);
       return;
     }
     if (pathname === '/api/plugins/config' && req.method === 'PUT') {

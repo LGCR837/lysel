@@ -12,6 +12,22 @@ let selectedAccount = ALL;
 let statusData = null;
 let configData = null;
 let lastLogCount = 0;
+let accountEditorMode = 'new';
+let accountDraft = null;
+
+const PLATFORM_FIELDS = {
+  oldchat: [
+    { key: 'origin', label: '服务器地址', type: 'text', def: 'https://oc.mcl0.dpdns.org', wide: true },
+    { key: 'identifier', label: '账号', type: 'text', def: '' },
+    { key: 'password', label: '密码', type: 'password', def: '' },
+    { key: 'deviceId', label: '设备 ID', type: 'text', def: '', hint: '留空自动生成' },
+    { key: 'encrypt', label: '链路加密', type: 'boolean', def: true },
+  ],
+  onebot11: [
+    { key: 'url', label: 'WS 地址', type: 'text', def: 'ws://127.0.0.1:3001', wide: true },
+    { key: 'token', label: '访问令牌', type: 'password', def: '' },
+  ],
+};
 
 const $ = (id) => document.getElementById(id);
 
@@ -137,7 +153,7 @@ function renderPlugins(plugins, accounts) {
             <button class="button button--small button--outline" data-action="plugin-config" data-account="${esc(cfgAccount)}" data-plugin="${esc(p.name)}" ${cfgAccount ? '' : 'disabled'}><span class="button__inner"><span>配置</span></span></button>
           </div>
           <div class="plugin-config" hidden>
-            <textarea class="json-editor" spellcheck="false"></textarea>
+            <div class="plugin-form" data-role="plugin-form"></div>
             <div class="form-actions">
               <button class="button button--small" data-action="plugin-save" data-account="${esc(cfgAccount)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>保存</span></span></button>
               <span class="hint"></span>
@@ -250,17 +266,110 @@ async function saveGlobalFromForm() {
   if (res.ok) await loadStatus();
 }
 
-function openAccountEditor(mode, id) {
-  const panel = $('account-editor');
-  panel.hidden = false;
-  panel.dataset.mode = mode;
-  panel.dataset.id = id ?? '';
-  $('account-editor-title').textContent = mode === 'new' ? '新增账户' : `编辑账户 ${id}`;
-  const raw = mode === 'new'
-    ? { id: 'new-account', platform: 'onebot11', label: '新账户', enabled: true, adapter: { url: 'ws://127.0.0.1:3001', token: '' }, plugins: {} }
-    : (configData?.accounts ?? []).find((a) => a.id === id) ?? { id, platform: 'oldchat', enabled: true, adapter: {}, plugins: {} };
-  $('account-json').value = JSON.stringify(raw, null, 2);
+function inferType(v) {
+  if (typeof v === 'boolean') return 'boolean';
+  if (typeof v === 'number') return 'number';
+  if (typeof v === 'string') return 'text';
+  return 'json';
 }
+
+function fieldHtml(f, scope = 'base') {
+  const attr = scope === 'plugin'
+    ? `data-pkey="${esc(f.key)}" data-ptype="${esc(f.type)}"`
+    : `data-key="${esc(f.key)}" data-type="${esc(f.type)}"${scope === 'adapter' ? ' data-adapter="1"' : ''}`;
+  let control;
+  if (f.type === 'boolean') {
+    const on = f.value === true || f.value === 'true';
+    control = `<select ${attr}><option value="true"${on ? ' selected' : ''}>启用</option><option value="false"${!on ? ' selected' : ''}>停用</option></select>`;
+  } else if (f.type === 'select') {
+    control = `<select ${attr}>${f.options.map((o) => `<option value="${esc(o[0])}"${String(f.value) === String(o[0]) ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
+  } else if (f.type === 'json') {
+    control = `<textarea class="json-editor" ${attr}>${esc(f.value ?? '')}</textarea>`;
+  } else {
+    const type = f.type === 'number' ? 'number' : f.type === 'password' ? 'password' : 'text';
+    control = `<input ${attr} type="${type}" value="${esc(f.value ?? '')}"${f.readonly ? ' readonly' : ''}>`;
+  }
+  return `<label class="field${f.wide ? ' field--wide' : ''}"><span>${esc(f.label)}</span>${control}${f.hint ? `<span class="field__hint">${esc(f.hint)}</span>` : ''}</label>`;
+}
+
+function renderAccountFields(raw) {
+  const platform = PLATFORM_FIELDS[raw.platform] ? raw.platform : 'onebot11';
+  const base = [
+    { key: 'id', label: '账户 ID', type: 'text', value: raw.id ?? '', readonly: accountEditorMode === 'edit' },
+    { key: 'platform', label: '平台', type: 'select', value: platform, options: [['oldchat', 'OldChat'], ['onebot11', 'OneBot v11']] },
+    { key: 'label', label: '备注', type: 'text', value: raw.label ?? '' },
+    { key: 'enabled', label: '启用', type: 'boolean', value: raw.enabled !== false },
+  ];
+  const adapter = PLATFORM_FIELDS[platform].map((f) => ({ ...f, value: raw.adapter?.[f.key] ?? f.def }));
+  $('account-fields').innerHTML = [
+    ...base.map((f) => fieldHtml(f, 'base')),
+    ...adapter.map((f) => fieldHtml(f, 'adapter')),
+  ].join('');
+}
+
+function collectAccountFields() {
+  const out = { id: '', platform: 'onebot11', label: '', enabled: true, adapter: {}, plugins: accountDraft?.plugins ?? {} };
+  for (const el of $('account-fields').querySelectorAll('[data-key]')) {
+    const key = el.dataset.key;
+    let value = el.value;
+    if (el.dataset.type === 'boolean') value = value === 'true';
+    else if (el.dataset.type === 'number') value = Number(value);
+    if (el.dataset.adapter === '1') out.adapter[key] = value;
+    else out[key] = value;
+  }
+  return out;
+}
+
+function renderPluginForm(box, example, config) {
+  const template = Object.keys(example).length ? example : config;
+  const keys = Object.keys(template);
+  const form = box.querySelector('[data-role="plugin-form"]');
+  if (!keys.length) {
+    form.innerHTML = '<p class="config-empty">该插件未提供配置项</p>';
+    return;
+  }
+  form.innerHTML = keys.map((k) => {
+    const def = k in example ? example[k] : config[k];
+    const type = inferType(def);
+    const value = k in config ? config[k] : def;
+    return fieldHtml({
+      key: k,
+      label: k,
+      type,
+      value: type === 'json' ? JSON.stringify(value ?? def, null, 2) : value,
+      wide: type === 'json',
+    }, 'plugin');
+  }).join('');
+}
+
+function collectPluginForm(box) {
+  const out = {};
+  for (const el of box.querySelectorAll('[data-pkey]')) {
+    const key = el.dataset.pkey;
+    const type = el.dataset.ptype;
+    if (type === 'number') out[key] = Number(el.value);
+    else if (type === 'boolean') out[key] = el.value === 'true';
+    else if (type === 'json') out[key] = JSON.parse(el.value);
+    else out[key] = el.value;
+  }
+  return out;
+}
+
+function openAccountEditor(mode, id) {
+  accountEditorMode = mode;
+  const panel = $('account-editor');
+  const raw = mode === 'new'
+    ? { id: 'new-account', platform: 'onebot11', label: '新账户', enabled: true, adapter: {}, plugins: {} }
+    : (configData?.accounts ?? []).find((a) => a.id === id) ?? { id, platform: 'onebot11', enabled: true, adapter: {}, plugins: {} };
+  accountDraft = JSON.parse(JSON.stringify(raw));
+  panel.hidden = false;
+  $('account-editor-title').textContent = mode === 'new' ? '新增账户' : `编辑账户 ${id}`;
+  renderAccountFields(accountDraft);
+}
+
+$('account-fields').addEventListener('change', (ev) => {
+  if (ev.target.dataset.key === 'platform') renderAccountFields(collectAccountFields());
+});
 
 document.addEventListener('click', async (ev) => {
   const nav = ev.target.closest('.sidebar__nav a');
@@ -310,13 +419,17 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (action === 'save-account') {
-    try {
-      const raw = JSON.parse($('account-json').value);
-      const res = await api('PUT', '/api/config/account', raw);
-      hint('account-hint', res.ok ? '已保存，新账户需重启生效' : '保存失败', res.ok);
-      if (res.ok) { await loadConfig(); await loadStatus(); }
-    } catch {
-      hint('account-hint', 'JSON 格式错误', false);
+    const raw = collectAccountFields();
+    if (!/^[\w.-]+$/.test(raw.id)) {
+      hint('account-hint', '账户 ID 不合法', false);
+      return;
+    }
+    const res = await api('PUT', '/api/config/account', raw);
+    hint('account-hint', res.ok ? '已保存，新账户需重启生效' : '保存失败', res.ok);
+    if (res.ok) {
+      $('account-editor').hidden = true;
+      await loadConfig();
+      await loadStatus();
     }
     return;
   }
@@ -334,21 +447,22 @@ document.addEventListener('click', async (ev) => {
     box.hidden = !box.hidden;
     if (!box.hidden) {
       const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(btn.dataset.account)}&name=${encodeURIComponent(btn.dataset.plugin)}`);
-      box.querySelector('textarea').value = JSON.stringify(res.data?.config ?? {}, null, 2);
+      renderPluginForm(box, res.data?.example ?? {}, res.data?.config ?? {});
     }
     return;
   }
   if (action === 'plugin-save') {
     const card = btn.closest('.account-card');
-    const target = card.querySelector('.plugin-config .hint');
+    const box = card.querySelector('.plugin-config');
+    const target = box.querySelector('.hint');
     try {
-      const config = JSON.parse(card.querySelector('.plugin-config textarea').value);
+      const config = collectPluginForm(box);
       const res = await api('PUT', '/api/plugins/config', { accountId: btn.dataset.account, name: btn.dataset.plugin, config });
       target.textContent = res.ok ? '已保存并重载' : '保存失败';
       target.className = `hint is-shown ${res.ok ? 'is-ok' : 'is-error'}`;
       setTimeout(() => { target.className = 'hint'; }, 4000);
     } catch {
-      target.textContent = 'JSON 格式错误';
+      target.textContent = '内容格式错误';
       target.className = 'hint is-shown is-error';
     }
     return;

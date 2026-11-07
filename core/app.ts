@@ -7,6 +7,7 @@ import {
   listPlugins,
   loadAccount,
   loadGlobal,
+  pluginExampleConfig,
   readAccountState,
   readPluginUserConfig,
   saveAccountConfig,
@@ -161,8 +162,11 @@ export class App {
     return true;
   }
 
-  getPluginConfig(accountId: string, name: string): Record<string, unknown> {
-    return readPluginUserConfig(accountId, name);
+  getPluginConfig(accountId: string, name: string) {
+    return {
+      config: readPluginUserConfig(accountId, name),
+      example: pluginExampleConfig(name),
+    };
   }
 
   async setPluginConfig(accountId: string, name: string, config: Record<string, unknown>): Promise<boolean> {
