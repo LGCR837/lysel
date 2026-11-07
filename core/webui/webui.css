@@ -428,3 +428,32 @@ ul { margin: 0; padding: 0; list-style: none; }
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .reveal { opacity: 1; transform: none; }
 }
+
+html, body, .terminal, .modal__panel, .table-wrap, .sidebar__nav {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar, body::-webkit-scrollbar, .terminal::-webkit-scrollbar,
+.modal__panel::-webkit-scrollbar, .table-wrap::-webkit-scrollbar, .sidebar__nav::-webkit-scrollbar {
+  display: none;
+}
+
+.dumogu-scrollbar { position: absolute; width: 100%; height: 100%; top: 0; left: 0; overflow: hidden; pointer-events: none; z-index: 140; }
+.dumogu-scrollbar.dumogu-scrollbar-mounted_to_body { width: 100vw; height: 100vh; position: fixed; }
+.dumogu-scrollbar-target { position: absolute; width: 0; height: 0; }
+.dumogu-scrollbar-target .dumogu-scrollbar-rail { position: absolute; }
+.dumogu-scrollbar-target .dumogu-scrollbar-rail.dumogu-scrollbar-rail_x { bottom: 0; left: 0; }
+.dumogu-scrollbar-target .dumogu-scrollbar-rail.dumogu-scrollbar-rail_y { right: 0; top: 0; }
+.dumogu-scrollbar-rail { opacity: 0; transition: opacity 200ms var(--ease-standard); pointer-events: initial; }
+.dumogu-scrollbar-rail.dumogu-scrollbar-rail_x { height: 8px; width: 100%; }
+.dumogu-scrollbar-rail.dumogu-scrollbar-rail_y { height: 100%; width: 8px; }
+.dumogu-scrollbar-rail.dumogu-scrollbar-rail_hidden { display: none; }
+.dumogu-scrollbar-rail.dumogu-scrollbar-rail_hover,
+.dumogu-scrollbar-rail.dumogu-scrollbar-rail_target_hover,
+.dumogu-scrollbar-rail.dumogu-scrollbar-rail_keep_show,
+.dumogu-scrollbar-rail.dumogu-scrollbar-rail_dragging { opacity: 1; }
+.dumogu-scrollbar-rail_container { position: relative; width: 100%; height: 100%; }
+.dumogu-scrollbar-rail_thumb { position: absolute; background-color: rgba(206, 218, 245, 0.2); user-select: none; border-radius: 0; box-sizing: border-box; transition: background-color 200ms var(--ease-standard); }
+.dumogu-scrollbar-rail_thumb.dumogu-scrollbar-rail_thumb_x { height: 100%; }
+.dumogu-scrollbar-rail_thumb.dumogu-scrollbar-rail_thumb_y { width: 100%; }
+.dumogu-scrollbar-rail_thumb:hover { background-color: rgba(242, 167, 197, 0.55); }

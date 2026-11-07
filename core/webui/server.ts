@@ -26,6 +26,7 @@ export interface WebUiDeps {
 const pages: Record<string, { file: string; type: string }> = {
   '/webui.css': { file: 'webui.css', type: 'text/css; charset=utf-8' },
   '/webui.js': { file: 'webui.js', type: 'text/javascript; charset=utf-8' },
+  '/scrollbar.js': { file: 'scrollbar.js', type: 'text/javascript; charset=utf-8' },
 };
 
 function send(res: http.ServerResponse, code: number, body: string | Buffer, type: string): void {
