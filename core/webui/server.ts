@@ -1,12 +1,14 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createLogger, getLogs } from '../log.ts';
 
 const log = createLogger('webui');
 const WEBUI_DIR = path.dirname(fileURLToPath(import.meta.url));
 const BODY_LIMIT = 262144;
+const COOKIE_NAME = 'lysel_auth';
 
 export interface WebUiDeps {
   status: () => unknown;
@@ -18,11 +20,10 @@ export interface WebUiDeps {
   pluginConfig: (accountId: string, name: string) => unknown;
   savePluginConfig: (accountId: string, name: string, config: Record<string, unknown>) => Promise<boolean>;
   checkKey: (key: string | undefined) => boolean;
+  consoleKey: () => string;
 }
 
 const pages: Record<string, { file: string; type: string }> = {
-  '/': { file: 'index.html', type: 'text/html; charset=utf-8' },
-  '/index.html': { file: 'index.html', type: 'text/html; charset=utf-8' },
   '/webui.css': { file: 'webui.css', type: 'text/css; charset=utf-8' },
   '/webui.js': { file: 'webui.js', type: 'text/javascript; charset=utf-8' },
 };
@@ -65,6 +66,19 @@ async function jsonBody(req: http.IncomingMessage): Promise<Record<string, any>>
   return parsed;
 }
 
+function readCookie(req: http.IncomingMessage, name: string): string {
+  const raw = req.headers.cookie ?? '';
+  for (const part of raw.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return rest.join('=');
+  }
+  return '';
+}
+
+function keyHash(key: string): string {
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
+
 function serveAsset(res: http.ServerResponse, name: string): void {
   const file = path.join(WEBUI_DIR, 'assets', path.basename(name));
   if (!fs.existsSync(file)) {
@@ -82,8 +96,45 @@ function serveAsset(res: http.ServerResponse, name: string): void {
 }
 
 export function startWebUi(host: string, port: number, deps: WebUiDeps): http.Server {
+  const page = (name: string): string => fs.readFileSync(path.join(WEBUI_DIR, name), 'utf8');
+
+  const authed = (req: http.IncomingMessage): boolean => {
+    const expected = deps.consoleKey();
+    if (!expected) return true;
+    if (deps.checkKey(req.headers['x-console-key'] as string | undefined)) return true;
+    return readCookie(req, COOKIE_NAME) === keyHash(expected);
+  };
+
   const handle = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const pathname = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`).pathname;
+
+    if (pathname === '/api/login' && req.method === 'POST') {
+      const body = await jsonBody(req);
+      if (!deps.checkKey(String(body.key ?? ''))) {
+        sendJson(res, { ok: false, message: '密钥不正确' }, 403);
+        return;
+      }
+      const token = keyHash(deps.consoleKey());
+      res.setHeader('Set-Cookie', `${COOKIE_NAME}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`);
+      sendJson(res, { ok: true });
+      return;
+    }
+
+    if (pathname === '/' || pathname === '/index.html' || pathname === '/login') {
+      if (!authed(req)) {
+        send(res, 200, page('login.html'), 'text/html; charset=utf-8');
+        return;
+      }
+      send(res, 200, page('index.html'), 'text/html; charset=utf-8');
+      return;
+    }
+
+    if (pathname.startsWith('/api/')) {
+      if (!authed(req)) {
+        sendJson(res, { ok: false, message: '密钥不正确' }, 403);
+        return;
+      }
+    }
 
     if (pathname === '/api/status') {
       sendJson(res, deps.status());
@@ -93,14 +144,6 @@ export function startWebUi(host: string, port: number, deps: WebUiDeps): http.Se
       sendJson(res, { lines: getLogs() });
       return;
     }
-
-    if (pathname.startsWith('/api/config') || pathname.startsWith('/api/accounts') || pathname.startsWith('/api/plugins')) {
-      if (!deps.checkKey(req.headers['x-console-key'] as string | undefined)) {
-        sendJson(res, { ok: false, message: '密钥不正确' }, 403);
-        return;
-      }
-    }
-
     if (pathname === '/api/config' && req.method === 'GET') {
       sendJson(res, deps.config());
       return;
@@ -139,9 +182,9 @@ export function startWebUi(host: string, port: number, deps: WebUiDeps): http.Se
       return;
     }
 
-    const page = pages[pathname];
-    if (page) {
-      send(res, 200, fs.readFileSync(path.join(WEBUI_DIR, page.file)), page.type);
+    const hit = pages[pathname];
+    if (hit) {
+      send(res, 200, fs.readFileSync(path.join(WEBUI_DIR, hit.file)), hit.type);
       return;
     }
     if (pathname.startsWith('/assets/')) {

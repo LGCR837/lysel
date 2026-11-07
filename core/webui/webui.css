@@ -74,29 +74,26 @@ ul { margin: 0; padding: 0; list-style: none; }
     linear-gradient(0deg, rgba(3, 8, 20, 0.9) 0%, rgba(3, 8, 20, 0.12) 54%, rgba(3, 8, 20, 0.46) 100%);
 }
 
-.gate {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
+.login-body { overflow: hidden; }
+.login {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
   display: grid;
   place-items: center;
-  background: rgba(4, 9, 20, 0.94);
+  padding: 24px;
 }
-.gate[hidden] { display: none; }
-.gate__panel {
-  width: min(420px, 88vw);
-  padding: 30px;
+.login__panel {
+  width: min(360px, 88vw);
+  padding: 26px;
   background: var(--panel);
   border: 1px solid var(--line);
+  display: grid;
+  gap: 14px;
   animation: gate-in 420ms var(--ease-out) both;
 }
-.gate__eyebrow {
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  color: var(--faint);
-}
-.gate__title { margin: 6px 0 22px; font-size: 19px; font-weight: 500; letter-spacing: 0.04em; }
-.gate__panel .field { margin-bottom: 18px; }
+.login__panel .field { margin: 0; }
+.login__panel .hint { min-height: 16px; }
 @keyframes gate-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
 .top-line { position: fixed; inset: 0 0 auto; z-index: 120; height: 2px; background: rgba(255, 255, 255, 0.04); }

@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lysel</title>
+<link rel="stylesheet" href="/webui.css">
+</head>
+<body class="login-body">
+<div class="site-background" aria-hidden="true">
+  <picture class="site-background__picture">
+    <img class="site-background__image" src="/assets/reimu-wallpaper.jpg" alt="">
+  </picture>
+  <div class="site-background__shade"></div>
+</div>
+
+<main class="login">
+  <form class="login__panel" id="login-form">
+    <label class="field"><span>密钥</span><input id="login-key" type="password" autocomplete="current-password" required autofocus></label>
+    <button class="button" type="submit"><span class="button__inner"><span>进入</span><span class="button__arrow">↗</span></span></button>
+    <p class="hint" id="login-hint"></p>
+  </form>
+</main>
+
+<script>
+document.getElementById('login-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const hint = document.getElementById('login-hint');
+  const key = document.getElementById('login-key').value;
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key }),
+  });
+  if (res.ok) {
+    location.replace('/');
+    return;
+  }
+  hint.textContent = '密钥不正确';
+  hint.className = 'hint is-shown is-error';
+  setTimeout(() => { hint.className = 'hint'; }, 4000);
+});
+</script>
+</body>
+</html>

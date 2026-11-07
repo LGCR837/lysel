@@ -48,14 +48,8 @@ function fmtUptime(ms) {
   return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
 }
 
-function consoleKey() {
-  return sessionStorage.getItem('lysel-key') || '';
-}
-
 async function api(method, path, body) {
   const headers = {};
-  const key = consoleKey();
-  if (key) headers['X-Console-Key'] = key;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   const res = await fetch(path, {
     method,
@@ -66,8 +60,8 @@ async function api(method, path, body) {
   let data = null;
   try { data = await res.json(); } catch {}
   if (res.status === 403) {
-    sessionStorage.removeItem('lysel-key');
-    if ($('gate')) showGate();
+    location.href = '/';
+    return { ok: false, status: 403, data };
   }
   return { ok: res.ok, status: res.status, data };
 }
@@ -555,43 +549,10 @@ document.addEventListener('click', async (ev) => {
   }
 });
 
-function showGate() {
-  $('gate').hidden = false;
-  $('gate-key').focus();
-}
-
-async function submitGate() {
-  const key = $('gate-key').value.trim();
-  if (!key) {
-    hint('gate-hint', '请输入密钥', false);
-    return;
-  }
-  sessionStorage.setItem('lysel-key', key);
-  const res = await api('GET', '/api/config');
-  if (!res.ok) {
-    sessionStorage.removeItem('lysel-key');
-    hint('gate-hint', '密钥不正确', false);
-    return;
-  }
-  configData = res.data;
-  $('gate').hidden = true;
-  await loadStatus(null, true);
-}
-
-$('gate-submit').addEventListener('click', submitGate);
-$('gate-key').addEventListener('keydown', (ev) => {
-  if (ev.key === 'Enter') submitGate();
-});
-
 window.addEventListener('hashchange', () => setView(location.hash.replace('#', '')));
 
-async function boot() {
-  setView(location.hash.replace('#', '') || 'dashboard');
-  await loadStatus();
-  if (statusData?.authRequired && !sessionStorage.getItem('lysel-key')) showGate();
-}
-
-void boot();
+setView(location.hash.replace('#', '') || 'dashboard');
+loadStatus();
 setInterval(() => {
   if (statusData) $('uptime-value').textContent = fmtUptime(statusData.uptime + (Date.now() - statusData.at));
 }, 1000);
