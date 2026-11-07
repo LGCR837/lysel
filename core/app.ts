@@ -232,7 +232,7 @@ export class App {
 
   private builtinCommand(adapter: Adapter, evt: MessageEvent): void {
     if (evt.text !== '#lysel' && evt.text !== '#Lysel') return;
-    const reply = `Lysel ${VERSION}\n运行时间 ${this.formatUptime()}`;
+    const reply = `Lysel ${VERSION}\nRunning ${this.formatUptime()}\n${this.manifests.length} Plugins`;
     void adapter.send({ scene: evt.scene, id: evt.peerId }, [{ type: 'text', text: reply }]).catch((e: any) =>
       this.log.error('内置命令回复失败', e?.message ?? e),
     );
@@ -241,6 +241,8 @@ export class App {
   private formatUptime(): string {
     const s = Math.floor((Date.now() - this.startedAt) / 1000);
     const pad = (n: number) => String(n).padStart(2, '0');
-    return `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+    const days = Math.floor(s / 86400);
+    const clock = `${pad(Math.floor((s % 86400) / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
+    return days ? `${days}:${clock}` : clock;
   }
 }
