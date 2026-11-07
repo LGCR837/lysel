@@ -32,7 +32,7 @@ export function readBody(ctx: PluginContext, evt: MessageEvent, cfg: TriggerConf
   if (wake) body = body.slice(wake.length).replace(/^[\s,，:：]+/, '').trim();
 
   if (cfg.requireWakeInGroup && evt.scene === 'group') {
-    const atSelf = evt.segments.some((s) => s.type === 'at' && s.id === evt.selfId);
+    const atSelf = evt.segments.some((s) => s.type === 'at' && isAtSelf(evt, s));
     if (!prefix && !wake && !atSelf) {
       ctx.log.debug(`触发判定 跳过 群内未唤醒 原文="${String(evt.text ?? '').slice(0, 60)}"`);
       return null;
@@ -45,10 +45,50 @@ export function readBody(ctx: PluginContext, evt: MessageEvent, cfg: TriggerConf
   return body;
 }
 
-/** 取消息里 @ 到的第一个用户 ID（跳过自己） */
+interface AtSegment {
+  type: 'at';
+  id: string;
+  uid?: string;
+  name?: string;
+}
+
+/** at 段的全部身份：ncuid、平台 uid */
+export function atIdentities(seg: AtSegment): string[] {
+  return [seg.id, seg.uid].map((v) => String(v ?? '').trim()).filter(Boolean);
+}
+
+/** 自己的全部身份（ncuid + uid），统一大写比较 */
+export function selfIdentitySet(evt: MessageEvent): Set<string> {
+  const all = [evt.selfId, ...(evt.selfIds ?? [])];
+  return new Set(all.map((v) => String(v ?? '').trim().toUpperCase()).filter(Boolean));
+}
+
+/** 该 at 段是否指向自己 */
+export function isAtSelf(evt: MessageEvent, seg: AtSegment): boolean {
+  const self = selfIdentitySet(evt);
+  return atIdentities(seg).some((v) => self.has(v.toUpperCase()));
+}
+
+export interface AtTarget {
+  id: string;
+  uid: string;
+  name: string;
+}
+
+/** 第一个 @ 到的他人，携带全部身份供成员表比对 */
+export function atTarget(evt: MessageEvent): AtTarget | null {
+  for (const seg of evt.segments) {
+    if (seg.type !== 'at') continue;
+    if (!seg.id && !seg.uid) continue;
+    if (isAtSelf(evt, seg)) continue;
+    return { id: seg.id || String(seg.uid), uid: seg.uid ?? '', name: seg.name ?? '' };
+  }
+  return null;
+}
+
+/** 取消息里 @ 到的第一个他人 ID */
 export function atTargetId(evt: MessageEvent): string {
-  const hit = evt.segments.find((s) => s.type === 'at' && s.id && s.id !== evt.selfId);
-  return hit ? String((hit as { id: string }).id) : '';
+  return atTarget(evt)?.id ?? '';
 }
 
 /** 北京时间 YYYY-MM-DD */

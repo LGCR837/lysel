@@ -1,4 +1,5 @@
 import type { MessageEvent, PluginContext } from '../../core/types.ts';
+import { isAtSelf } from '../_shared/trigger.ts';
 
 type Part = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } };
 type Role = 'system' | 'user' | 'assistant';
@@ -93,7 +94,7 @@ export function onLoad(ctx: PluginContext) {
       }
       return text;
     }
-    const atSelf = evt.segments.some((s) => s.type === 'at' && s.id === evt.selfId);
+    const atSelf = evt.segments.some((s) => s.type === 'at' && isAtSelf(evt, s));
     if (atSelf) {
       ctx.log.debug('触发 群内 @ 自己');
       return text;

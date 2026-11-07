@@ -1,6 +1,6 @@
 // 今日老婆：按群隔离的抽取 / 求婚 / 强娶 / 关系图
 import type { MessageEvent, PluginContext, Member } from '../../core/types.ts';
-import { readBody, atTargetId, todayStr, clockStr, wakeWordsOf } from '../_shared/trigger.ts';
+import { readBody, atTarget, todayStr, clockStr, wakeWordsOf } from '../_shared/trigger.ts';
 import { WpStore, type ProposeRecord } from './store.ts';
 import { renderGraph, prewarmAvatar, setAvatarTimeout, setMediaOrigin, type GraphRecord } from './graph.ts';
 
@@ -125,25 +125,67 @@ export function onLoad(ctx: PluginContext) {
     await ctx.reply(evt, `你今天的老婆（${list.length} 个）：\n${lines.join('\n')}`);
   };
 
-  const findMember = async (evt: MessageEvent, targetId: string): Promise<Member | undefined> => {
-    if (!targetId) return undefined;
-    const members = await ctx.getGroupMembers(evt.peerId);
-    return members.find((m) => m.id === targetId) ?? members.find((m) => m.id.toUpperCase() === targetId.toUpperCase());
+  // 目标解析：@ 段优先，其次正文；ncuid / uid / 昵称三路比对
+  const norm = (v: unknown): string =>
+    String(v ?? '')
+      .replace(/[\u200b-\u200f\ufeff]/g, '')
+      .trim()
+      .toUpperCase();
+
+  const memberKeys = (m: Member): string[] => [m.id, m.uid, m.name].map(norm).filter(Boolean);
+
+  const matchMember = (members: Member[], values: string[]): Member | undefined => {
+    const wanted = values.map(norm).filter(Boolean);
+    if (!wanted.length) return undefined;
+    return members.find((m) => {
+      const keys = memberKeys(m);
+      return wanted.some((w) => keys.includes(w));
+    });
   };
 
-  const handlePropose = async (evt: MessageEvent, targetId: string): Promise<void> => {
+  /** 命令目标：优先取 @ 段（跳过自己），没有 @ 才用正文 */
+  const resolveTarget = async (
+    evt: MessageEvent,
+    raw: string,
+  ): Promise<{ member?: Member; query: string; via: string }> => {
+    const members = await ctx.getGroupMembers(evt.peerId).catch((e: any) => {
+      ctx.log.warn(`群成员拉取失败 ${e?.message ?? e}`);
+      return [] as Member[];
+    });
+    const at = atTarget(evt);
+    if (at) {
+      const hit = matchMember(members, [at.id, at.uid, at.name]);
+      ctx.log.debug(
+        `目标解析 来源=@ id=${at.id} uid=${at.uid || '-'} 名字=${at.name || '-'} 命中=${hit ? hit.id : '无'}`,
+      );
+      return { member: hit, query: at.name || at.id, via: 'at' };
+    }
+    const query = raw.replace(/^@+/, '').trim();
+    if (!query) return { query: '', via: 'none' };
+    const hit = matchMember(members, [query]);
+    ctx.log.debug(`目标解析 来源=正文 "${query}" 命中=${hit ? hit.id : '无'}`);
+    return { member: hit, query, via: 'text' };
+  };
+
+  const handlePropose = async (evt: MessageEvent, raw: string): Promise<void> => {
     if (evt.scene !== 'group') {
       await ctx.reply(evt, '求婚只能在群聊中进行哦~');
       return;
     }
-    if (!targetId) {
+    if (!atTarget(evt) && !raw.trim()) {
       await ctx.reply(evt, '用法: 求婚 @某人');
       return;
     }
-    if (targetId === evt.sender.id) {
+    const { member } = await resolveTarget(evt, raw);
+    if (!member) {
+      await ctx.reply(evt, '没有在群里找到这个用户喵~');
+      return;
+    }
+    if (member.id === evt.sender.id) {
       await ctx.reply(evt, '不能向自己求婚哦！');
       return;
     }
+    const targetId = member.id;
     const pk = `${evt.peerId}:${targetId}`;
     if (proposals.has(pk)) {
       await ctx.reply(evt, '对方已经有一个待处理的求婚了，请稍后再试。');
@@ -155,11 +197,7 @@ export function onLoad(ctx: PluginContext) {
         return;
       }
     }
-    const target = await findMember(evt, targetId);
-    if (!target) {
-      await ctx.reply(evt, '没有在群里找到这个用户喵~');
-      return;
-    }
+    const target = member;
     const targetName = target.name || target.id;
     const proposerName = evt.sender.name || evt.sender.id;
 
@@ -242,16 +280,16 @@ export function onLoad(ctx: PluginContext) {
     return true;
   };
 
-  const handleForceMarry = async (evt: MessageEvent, targetId: string): Promise<void> => {
+  const handleForceMarry = async (evt: MessageEvent, raw: string): Promise<void> => {
     if (evt.scene !== 'group') {
       await ctx.reply(evt, '此功能仅在群聊中可用哦~');
       return;
     }
-    if (!targetId) {
+    if (!atTarget(evt) && !raw.trim()) {
       await ctx.reply(evt, '用法: 强娶 @某人');
       return;
     }
-    const target = await findMember(evt, targetId);
+    const { member: target } = await resolveTarget(evt, raw);
     if (!target) {
       await ctx.reply(evt, '没有在群里找到这个用户喵~');
       return;
@@ -413,12 +451,12 @@ export function onLoad(ctx: PluginContext) {
     }
     const propose = body.match(/^求婚[\s：:]*(.*)$/);
     if (propose) {
-      await handlePropose(evt, atTargetId(evt) || propose[1].trim());
+      await handlePropose(evt, propose[1]);
       return;
     }
     const force = body.match(/^强娶[\s：:]*(.*)$/);
     if (force) {
-      await handleForceMarry(evt, atTargetId(evt) || force[1].trim());
+      await handleForceMarry(evt, force[1]);
       return;
     }
     if (/^(rbq排行|rbq榜)$/i.test(body)) {

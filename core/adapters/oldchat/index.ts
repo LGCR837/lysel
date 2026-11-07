@@ -26,6 +26,8 @@ export class OldChatAdapter extends BaseAdapter {
   private token = '';
   private refreshToken = '';
   private deviceId = '';
+  /** 登录返回的 uid，与 selfId（ncuid）并存用于 @ 自己判定 */
+  private selfUid = '';
   private readonly origin: string;
 
   constructor(
@@ -69,6 +71,7 @@ export class OldChatAdapter extends BaseAdapter {
     this.token = String(state.accessToken ?? '');
     this.refreshToken = String(state.refreshToken ?? '');
     this.selfId = String(state.selfId ?? '');
+    this.selfUid = String(state.selfUid ?? '');
     await this.session.ensure();
     if (!this.token) await this.signIn();
 
@@ -188,6 +191,7 @@ export class OldChatAdapter extends BaseAdapter {
     const list = Array.isArray(res) ? res : (res?.members ?? res?.items ?? []);
     return list.map((m: any) => ({
       id: String(m.ncuid ?? m.uid ?? ''),
+      uid: String(m.uid ?? ''),
       name: String(m.display_name ?? m.username ?? ''),
       avatar: m.avatar_url,
       role: m.role,
@@ -210,8 +214,9 @@ export class OldChatAdapter extends BaseAdapter {
     const res = await loginWithPassword(this.http, identifier, password, this.deviceId);
     this.applyLogin(res);
     this.selfId = String(res.user?.ncuid ?? res.user?.uid ?? this.selfId);
-    this.setState({ selfId: this.selfId });
-    this.log.info(`登录成功 ${this.selfId}`);
+    this.selfUid = String(res.user?.uid ?? this.selfUid);
+    this.setState({ selfId: this.selfId, selfUid: this.selfUid });
+    this.log.info(`登录成功 ${this.selfId}${this.selfUid ? `/${this.selfUid}` : ''}`);
   }
 
   private recovering: Promise<void> | null = null;
@@ -255,13 +260,14 @@ export class OldChatAdapter extends BaseAdapter {
       refreshToken: this.refreshToken,
       deviceId: this.deviceId,
       selfId: this.selfId,
+      selfUid: this.selfUid,
     });
   }
 
   private handleEvent(type: string, data: any, pts?: number): void {
     if (typeof pts === 'number') this.setState({ pts });
     if (type === 'direct_message' || type === 'group_message') {
-      const evt = toMessageEvent(this.accountId, this.selfId, type, data);
+      const evt = toMessageEvent(this.accountId, this.selfId, type, data, this.selfUid);
       if (evt) this.emitMessage(evt);
     }
   }

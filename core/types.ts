@@ -2,7 +2,7 @@ export type Scene = 'private' | 'group';
 
 export type Segment =
   | { type: 'text'; text: string }
-  | { type: 'at'; id: string; name?: string }
+  | { type: 'at'; id: string; uid?: string; name?: string }
   | { type: 'reply'; id: string }
   | { type: 'image'; url?: string; file?: string }
   | { type: 'voice'; url?: string; duration?: number }
@@ -28,6 +28,8 @@ export interface MessageEvent {
   accountId: string;
   platform: string;
   selfId: string;
+  /** 自己的全部已知身份，用于 @ 自己判定 */
+  selfIds?: string[];
   scene: Scene;
   peerId: string;
   sender: Sender;
@@ -69,6 +71,8 @@ export interface GroupInfo {
 
 export interface Member extends UserInfo {
   card?: string;
+  /** 平台原始 uid，与 id 可能是同一套也可能不是 */
+  uid?: string;
 }
 
 export interface AdapterStatus {

@@ -6,6 +6,7 @@ export function toMessageEvent(
   selfId: string,
   type: string,
   data: any,
+  selfUid = '',
 ): MessageEvent | null {
   if (type !== 'group_message' && type !== 'direct_message') return null;
   const scene: Scene = type === 'group_message' ? 'group' : 'private';
@@ -23,6 +24,7 @@ export function toMessageEvent(
     accountId,
     platform: 'oldchat',
     selfId,
+    selfIds: [selfId, selfUid].filter(Boolean),
     scene,
     peerId,
     sender: {

@@ -38,7 +38,9 @@ export function decodeBody(body: string, msgType: string, mediaUrl?: string): Se
   if (payload.quote?.id) segs.push({ type: 'reply', id: String(payload.quote.id) });
   if (payload.text) segs.push({ type: 'text', text: payload.text });
   for (const m of payload.mentions ?? []) {
-    segs.push({ type: 'at', id: String(m.ncuid || m.uid || ''), name: m.name });
+    const ncuid = String(m.ncuid ?? '');
+    const uid = String(m.uid ?? '');
+    segs.push({ type: 'at', id: ncuid || uid, uid: uid || undefined, name: m.name });
   }
   if (payload.forward_v2) {
     const count = Array.isArray(payload.forward_v2.items) ? payload.forward_v2.items.length : 0;
