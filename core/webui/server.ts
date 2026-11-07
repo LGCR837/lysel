@@ -71,7 +71,13 @@ function serveAsset(res: http.ServerResponse, name: string): void {
     send(res, 404, 'not found', 'text/plain; charset=utf-8');
     return;
   }
-  const type = file.endsWith('.webp') ? 'image/webp' : 'application/octet-stream';
+  const type = file.endsWith('.webp')
+    ? 'image/webp'
+    : file.endsWith('.png')
+      ? 'image/png'
+      : file.endsWith('.jpg') || file.endsWith('.jpeg')
+        ? 'image/jpeg'
+        : 'application/octet-stream';
   send(res, 200, fs.readFileSync(file), type);
 }
 
