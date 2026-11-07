@@ -17,7 +17,7 @@ let accountDraft = null;
 let sigAccounts = '';
 let sigPlugins = '';
 let sigGlobal = '';
-const openPanels = new Map();
+let configTarget = null;
 let revealObserver = null;
 let firstPaint = true;
 let hintToken = 0;
@@ -148,42 +148,26 @@ function renderPlugins(plugins, accounts) {
         const rows = scoped.length
           ? scoped.map((accId) => {
               const on = Boolean((p.enabled ?? []).find((e) => e.accountId === accId)?.enabled);
+              const actions = selectedAccount === ALL
+                ? `<span class="tag ${on ? 'tag--pink' : 'tag--dim'}">${on ? '启用' : '停用'}</span>`
+                : `<div class="plugin-switch-row__actions">
+                    ${on
+                      ? `<button class="button button--small button--on" data-action="plugin-stop" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>停止</span></span></button>`
+                      : `<button class="button button--small button--on" data-action="plugin-start" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>启动</span></span></button>`}
+                    <button class="button button--small button--outline" data-action="plugin-config" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>配置</span></span></button>
+                  </div>`;
               return `<div class="plugin-switch-row">
                 <span class="plugin-switch-row__name">${esc(accId)}</span>
-                <div class="plugin-switch-row__actions">
-                  ${on
-                    ? `<button class="button button--small button--on" data-action="plugin-stop" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>停止</span></span></button>`
-                    : `<button class="button button--small button--on" data-action="plugin-start" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>启动</span></span></button>`}
-                  <button class="button button--small button--outline" data-action="plugin-config" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>配置</span></span></button>
-                </div>
+                ${actions}
               </div>`;
             }).join('')
           : '<p class="empty">暂无账户</p>';
-        const panelAccount = openPanels.get(p.name) ?? '';
         return `<article class="${cardCls}" data-delay="${Math.min(i + 1, 7)}">
           <div class="account-card__head"><div><div class="account-card__id">${esc(p.name)}</div><div class="account-card__label">v${esc(p.version)} · ${esc(p.description || '无说明')}</div></div><span class="plugin-card__state">${(p.enabled ?? []).filter((e) => e.enabled).length} 个账户启用</span></div>
           <div class="plugin-switches">${rows}</div>
-          <div class="plugin-config"${panelAccount ? '' : ' hidden'}>
-            <div class="plugin-form" data-role="plugin-form"></div>
-            <div class="form-actions">
-              <button class="button button--small" data-action="plugin-save" data-account="${esc(panelAccount)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>保存</span></span></button>
-              <span class="hint"></span>
-            </div>
-          </div>
         </article>`;
       }).join('')
     : '<p class="empty">暂无插件</p>';
-  void refillOpenPanels();
-}
-
-async function refillOpenPanels() {
-  for (const box of document.querySelectorAll('#plugin-cards .plugin-config')) {
-    if (box.hidden) continue;
-    const save = box.querySelector('[data-action="plugin-save"]');
-    if (!save?.dataset.account) continue;
-    const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(save.dataset.account)}&name=${encodeURIComponent(save.dataset.plugin)}`);
-    if (!box.hidden) renderPluginForm(box, res.data?.example ?? {}, res.data?.config ?? {});
-  }
 }
 
 function renderSettings(cfg) {
@@ -366,10 +350,9 @@ function collectAccountFields() {
   return out;
 }
 
-function renderPluginForm(box, example, config) {
+function renderPluginForm(form, example, config) {
   const template = Object.keys(example).length ? example : config;
   const keys = Object.keys(template);
-  const form = box.querySelector('[data-role="plugin-form"]');
   if (!keys.length) {
     form.innerHTML = '<p class="config-empty">该插件未提供配置项</p>';
     return;
@@ -386,6 +369,22 @@ function renderPluginForm(box, example, config) {
       wide: type === 'json',
     }, 'plugin');
   }).join('');
+}
+
+async function openConfigModal(account, plugin) {
+  configTarget = { account, plugin };
+  $('plugin-config-title').textContent = plugin;
+  $('plugin-config-sub').textContent = account;
+  $('plugin-config-hint').className = 'hint';
+  $('plugin-config-modal').hidden = false;
+  const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(account)}&name=${encodeURIComponent(plugin)}`);
+  if (!configTarget) return;
+  renderPluginForm($('plugin-config-form'), res.data?.example ?? {}, res.data?.config ?? {});
+}
+
+function closeConfigModal() {
+  $('plugin-config-modal').hidden = true;
+  configTarget = null;
 }
 
 function collectPluginForm(box) {
@@ -418,6 +417,10 @@ $('account-fields').addEventListener('change', (ev) => {
 });
 
 document.addEventListener('click', async (ev) => {
+  if (ev.target.id === 'plugin-config-modal') {
+    closeConfigModal();
+    return;
+  }
   const nav = ev.target.closest('.sidebar__nav a');
   if (nav) {
     ev.preventDefault();
@@ -434,6 +437,8 @@ document.addEventListener('click', async (ev) => {
     'edit-global-json': 'edit-global-json',
     'cancel-global-json': 'cancel-global-json',
     'save-global-json': 'save-global-json',
+    'plugin-config-save': 'plugin-config-save',
+    'plugin-config-cancel': 'plugin-config-cancel',
   };
   const btn = ev.target.closest('[data-action], button[id]');
   if (!btn) return;
@@ -491,37 +496,22 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (action === 'plugin-config') {
-    const card = btn.closest('.account-card');
-    const box = card.querySelector('.plugin-config');
-    const save = box.querySelector('[data-action="plugin-save"]');
-    const plugin = btn.dataset.plugin;
-    const accId = btn.dataset.account;
-    if (!box.hidden && save?.dataset.account === accId) {
-      box.hidden = true;
-      openPanels.delete(plugin);
-      return;
-    }
-    openPanels.set(plugin, accId);
-    if (save) save.dataset.account = accId;
-    box.hidden = false;
-    const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(accId)}&name=${encodeURIComponent(plugin)}`);
-    if (!box.hidden) renderPluginForm(box, res.data?.example ?? {}, res.data?.config ?? {});
+    await openConfigModal(btn.dataset.account, btn.dataset.plugin);
     return;
   }
-  if (action === 'plugin-save') {
-    const card = btn.closest('.account-card');
-    const box = card.querySelector('.plugin-config');
-    const target = box.querySelector('.hint');
+  if (action === 'plugin-config-save') {
+    if (!configTarget) return;
     try {
-      const config = collectPluginForm(box);
-      const res = await api('PUT', '/api/plugins/config', { accountId: btn.dataset.account, name: btn.dataset.plugin, config });
-      target.textContent = res.ok ? '已保存并重载' : '保存失败';
-      target.className = `hint is-shown ${res.ok ? 'is-ok' : 'is-error'}`;
-      setTimeout(() => { target.className = 'hint'; }, 4000);
+      const config = collectPluginForm($('plugin-config-form'));
+      const res = await api('PUT', '/api/plugins/config', { accountId: configTarget.account, name: configTarget.plugin, config });
+      hint('plugin-config-hint', res.ok ? '已保存并重载' : '保存失败', res.ok);
     } catch {
-      target.textContent = '内容格式错误';
-      target.className = 'hint is-shown is-error';
+      hint('plugin-config-hint', '内容格式错误', false);
     }
+    return;
+  }
+  if (action === 'plugin-config-cancel') {
+    closeConfigModal();
     return;
   }
   if (action === 'save-global') {
@@ -551,6 +541,10 @@ document.addEventListener('click', async (ev) => {
 });
 
 window.addEventListener('hashchange', () => setView(location.hash.replace('#', '')));
+
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && !$('plugin-config-modal').hidden) closeConfigModal();
+});
 
 setView(location.hash.replace('#', '') || 'dashboard');
 loadStatus();

@@ -241,10 +241,10 @@ ul { margin: 0; padding: 0; list-style: none; }
 .panel__head h3 { font-size: 15px; font-weight: 520; letter-spacing: 0.06em; }
 .panel__head span { color: var(--pink); font-size: 9px; letter-spacing: 0.18em; }
 .panel__body { padding: 6px 22px 14px; }
-.list-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px; padding: 13px 10px; margin: 0 -10px; border-bottom: 1px solid rgba(206, 218, 245, 0.1); transition: background 260ms var(--ease-standard), box-shadow 260ms var(--ease-standard); }
+.list-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px; padding: 13px 0; border-bottom: 1px solid rgba(206, 218, 245, 0.1); }
 .list-row:last-child { border-bottom: 0; }
-.list-row:hover { background: rgba(242, 167, 197, 0.05); box-shadow: inset 2px 0 0 rgba(242, 167, 197, 0.5); }
-.list-row__name { font-size: 13px; font-weight: 500; }
+.list-row__name { font-size: 13px; font-weight: 500; transition: color 240ms var(--ease-standard); }
+.list-row:hover .list-row__name { color: var(--pink-soft); }
 .list-row__sub { display: block; margin-top: 2px; color: var(--faint); font-size: 10px; letter-spacing: 0.06em; }
 .tag { padding: 3px 9px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 9px; letter-spacing: 0.1em; white-space: nowrap; }
 .tag--pink { border-color: rgba(242, 167, 197, 0.5); color: var(--pink-soft); }
@@ -367,6 +367,33 @@ ul { margin: 0; padding: 0; list-style: none; }
 .plugin-config { margin-top: 16px; }
 .plugin-config .json-editor { min-height: 150px; }
 .plugin-config .form-actions { padding: 12px 0 0; border-top: 0; }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 9, 20, 0.78);
+  animation: modal-fade 200ms var(--ease-standard) both;
+}
+.modal[hidden] { display: none; }
+.modal__panel {
+  width: min(720px, 92vw);
+  max-height: 84vh;
+  overflow: auto;
+  background: var(--navy-900);
+  border: 1px solid var(--line-strong);
+  animation: modal-in 300ms var(--ease-out) both;
+}
+.modal__head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 16px 22px; border-bottom: 1px solid var(--line); }
+.modal__head h3 { font-size: 15px; font-weight: 500; letter-spacing: 0.04em; }
+.modal__head span { color: var(--faint); font-size: 10px; letter-spacing: 0.12em; }
+.modal .plugin-form { border-top: 0; }
+.modal .form-actions { padding: 16px 22px; }
+@keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 1180px) {
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
