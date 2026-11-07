@@ -312,10 +312,11 @@ ul { margin: 0; padding: 0; list-style: none; }
 .section-tools { display: flex; justify-content: flex-end; margin-bottom: 14px; }
 .tabs { display: flex; flex-wrap: wrap; gap: 0; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
 .tab { position: relative; padding: 12px 20px; border: 1px solid transparent; border-bottom: 0; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; transition: color 220ms var(--ease-standard), background 220ms var(--ease-standard), border-color 220ms var(--ease-standard); }
-.tab::after { content: ""; position: absolute; inset: auto 0 -1px; height: 1px; background: var(--pink); transform: scaleX(0); transform-origin: left; transition: transform 320ms var(--ease-out); }
+.tabs { position: relative; display: flex; flex-wrap: wrap; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.tabs__indicator { position: absolute; bottom: -1px; left: 0; width: 0; height: 1px; background: var(--pink); transition: left 340ms var(--ease-out), width 340ms var(--ease-out); }
+.tab { position: relative; padding: 12px 20px; color: var(--muted); font-size: 12px; letter-spacing: 0.08em; transition: color 220ms var(--ease-standard); }
 .tab:hover { color: var(--ink); }
-.tab.is-active { color: var(--ink); border-color: var(--line); background: rgba(12, 25, 48, 0.48); }
-.tab.is-active::after { transform: scaleX(1); }
+.tab.is-active { color: var(--ink); }
 .tab__count { margin-left: 8px; color: var(--pink); font-size: 9px; }
 
 .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -361,7 +362,7 @@ ul { margin: 0; padding: 0; list-style: none; }
 .account-actions, .plugin-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
 .plugin-card__state { color: var(--faint); font-size: 10px; letter-spacing: 0.08em; white-space: nowrap; }
 .plugin-switches { margin-top: 20px; border-top: 1px solid var(--line); }
-.plugin-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid rgba(206, 218, 245, 0.1); }
+.plugin-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
 .plugin-switch-row__name { color: var(--muted); font-size: 12px; letter-spacing: 0.06em; }
 .plugin-switch-row__actions { display: flex; gap: 8px; }
 .plugin-config { margin-top: 16px; }

@@ -85,6 +85,7 @@ function setView(name) {
   document.title = `Lysel / ${views[name][0]}`;
   observeReveals();
   if (name === 'logs') loadLogs();
+  if (name === 'plugins') syncTabIndicator();
   if (name === 'settings' || name === 'accounts' || name === 'plugins') loadConfig();
 }
 
@@ -133,15 +134,31 @@ function renderAccounts(accounts) {
     : '<p class="empty">暂无账户，点击「新增账户」创建</p>';
 }
 
-function renderPlugins(plugins, accounts) {
-  const cardCls = firstPaint ? 'account-card reveal' : 'account-card is-visible';
+function syncTabIndicator() {
+  const wrap = $('plugin-tabs');
+  const bar = wrap.querySelector('.tabs__indicator');
+  const active = wrap.querySelector('.tab.is-active');
+  if (!bar) return;
+  if (!active) {
+    bar.style.width = '0px';
+    return;
+  }
+  bar.style.left = `${active.offsetLeft}px`;
+  bar.style.width = `${active.offsetWidth}px`;
+}
+
+function renderTabs(plugins, accounts) {
   const tabs = [{ id: ALL, label: '全部' }].concat(accounts.map((a) => ({ id: a.id, label: a.id })));
   if (!tabs.some((t) => t.id === selectedAccount)) selectedAccount = ALL;
-  $('plugin-tabs').innerHTML = tabs.map((t) => {
+  $('plugin-tabs').innerHTML = '<span class="tabs__indicator"></span>' + tabs.map((t) => {
     const count = t.id === ALL ? plugins.length : plugins.filter((p) => (p.enabled ?? []).some((e) => e.accountId === t.id)).length;
     return `<button class="tab ${selectedAccount === t.id ? 'is-active' : ''}" data-action="tab" data-id="${esc(t.id)}">${esc(t.label)}<span class="tab__count">${count}</span></button>`;
   }).join('');
+  syncTabIndicator();
+}
 
+function renderPluginCards(plugins, accounts) {
+  const cardCls = firstPaint ? 'account-card reveal' : 'account-card is-visible';
   const scoped = selectedAccount === ALL ? accounts.map((a) => a.id) : [selectedAccount];
   $('plugin-cards').innerHTML = plugins.length
     ? plugins.map((p, i) => {
@@ -168,6 +185,11 @@ function renderPlugins(plugins, accounts) {
         </article>`;
       }).join('')
     : '<p class="empty">暂无插件</p>';
+}
+
+function renderPlugins(plugins, accounts) {
+  renderTabs(plugins, accounts);
+  renderPluginCards(plugins, accounts);
 }
 
 function renderSettings(cfg) {
@@ -225,7 +247,7 @@ function renderStatus(data) {
     observeReveals();
   }
 
-  const pluginSig = JSON.stringify([plugins, accounts.map((a) => a.id), selectedAccount]);
+  const pluginSig = JSON.stringify([plugins, accounts.map((a) => a.id)]);
   if (pluginSig !== sigPlugins) {
     sigPlugins = pluginSig;
     $('dash-plugins').innerHTML = plugins.length
@@ -447,8 +469,9 @@ document.addEventListener('click', async (ev) => {
 
   if (action === 'tab') {
     selectedAccount = btn.dataset.id;
-    sigPlugins = '';
-    renderPlugins(statusData?.plugins ?? [], statusData?.accounts ?? []);
+    document.querySelectorAll('#plugin-tabs .tab').forEach((el) => el.classList.toggle('is-active', el.dataset.id === selectedAccount));
+    syncTabIndicator();
+    renderPluginCards(statusData?.plugins ?? [], statusData?.accounts ?? []);
     return;
   }
   if (action === 'refresh') {
@@ -505,6 +528,7 @@ document.addEventListener('click', async (ev) => {
       const config = collectPluginForm($('plugin-config-form'));
       const res = await api('PUT', '/api/plugins/config', { accountId: configTarget.account, name: configTarget.plugin, config });
       hint('plugin-config-hint', res.ok ? '已保存并重载' : '保存失败', res.ok);
+      if (res.ok) setTimeout(closeConfigModal, 500);
     } catch {
       hint('plugin-config-hint', '内容格式错误', false);
     }
@@ -541,6 +565,7 @@ document.addEventListener('click', async (ev) => {
 });
 
 window.addEventListener('hashchange', () => setView(location.hash.replace('#', '')));
+window.addEventListener('resize', syncTabIndicator);
 
 document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape' && !$('plugin-config-modal').hidden) closeConfigModal();
