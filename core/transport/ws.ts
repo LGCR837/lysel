@@ -43,7 +43,7 @@ export class EventSocket {
 
   private async diagnose(): Promise<string> {
     try {
-      const res = await fetch(this.url());
+      const res = await fetch(this.url().replace(/^ws/, 'http'));
       const text = (await res.text()).slice(0, 120);
       return `握手被拒 HTTP ${res.status} ${text}`;
     } catch (e: any) {
