@@ -21,7 +21,6 @@ let configTarget = null;
 let revealObserver = null;
 let firstPaint = true;
 let hintToken = 0;
-const scrollBars = [];
 
 const PLATFORM_FIELDS = {
   oldchat: [
@@ -88,7 +87,6 @@ function setView(name) {
   if (name === 'logs') loadLogs();
   if (name === 'plugins') syncTabIndicator();
   if (name === 'settings' || name === 'accounts' || name === 'plugins') loadConfig();
-  syncScrollbars();
 }
 
 function observeReveals() {
@@ -260,7 +258,6 @@ function renderStatus(data) {
   }
 
   renderSettings(data.config ?? {});
-  syncScrollbars();
   firstPaint = false;
 }
 
@@ -303,7 +300,6 @@ async function loadLogs() {
     const atBottom = terminal.scrollTop + terminal.clientHeight >= terminal.scrollHeight - 40;
     terminal.innerHTML = lines.map((l) => `<div class="log-line log-line--${esc(l.level)}"><span class="log-line__time">${esc(l.time)}</span><span class="log-line__level">${esc(l.level.toUpperCase())}</span><span class="log-line__text">${esc(l.scope ? `[${l.scope}] ` : '')}${esc(l.text)}</span></div>`).join('');
     if (atBottom) terminal.scrollTop = terminal.scrollHeight;
-    syncScrollbars();
   } catch {}
 }
 
@@ -406,7 +402,6 @@ async function openConfigModal(account, plugin) {
   const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(account)}&name=${encodeURIComponent(plugin)}`);
   if (!configTarget) return;
   renderPluginForm($('plugin-config-form'), res.data?.example ?? {}, res.data?.config ?? {});
-  setTimeout(syncScrollbars, 0);
 }
 
 function closeConfigModal() {
@@ -576,30 +571,6 @@ document.addEventListener('keydown', (ev) => {
   if (ev.key === 'Escape' && !$('plugin-config-modal').hidden) closeConfigModal();
 });
 
-function mountScrollbars() {
-  const Lib = window['dumogu-scrollbar']?.DumoguScrollbar;
-  if (!Lib) return;
-  for (const el of [document.documentElement, $('terminal'), document.querySelector('.modal__panel')]) {
-    if (!el) continue;
-    try {
-      const bar = new Lib({ keepShow: true });
-      bar.bind(el);
-      scrollBars.push(bar);
-    } catch (e) {
-      console.warn('滚动条挂载失败', e);
-    }
-  }
-}
-
-function syncScrollbars() {
-  for (const bar of scrollBars) {
-    try {
-      bar.update();
-    } catch {}
-  }
-}
-
-mountScrollbars();
 setView(location.hash.replace('#', '') || 'dashboard');
 loadStatus();
 setInterval(() => {
