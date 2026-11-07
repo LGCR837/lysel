@@ -17,7 +17,7 @@ let accountDraft = null;
 let sigAccounts = '';
 let sigPlugins = '';
 let sigGlobal = '';
-const openPanels = new Set();
+const openPanels = new Map();
 let revealObserver = null;
 let firstPaint = true;
 let hintToken = 0;
@@ -154,22 +154,19 @@ function renderPlugins(plugins, accounts) {
                   ${on
                     ? `<button class="button button--small button--on" data-action="plugin-stop" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>停止</span></span></button>`
                     : `<button class="button button--small button--on" data-action="plugin-start" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>启动</span></span></button>`}
+                  <button class="button button--small button--outline" data-action="plugin-config" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>配置</span></span></button>
                 </div>
               </div>`;
             }).join('')
           : '<p class="empty">暂无账户</p>';
-        const cfgAccount = selectedAccount === ALL ? '' : selectedAccount;
-        const cfgKey = `${cfgAccount}::${p.name}`;
+        const panelAccount = openPanels.get(p.name) ?? '';
         return `<article class="${cardCls}" data-delay="${Math.min(i + 1, 7)}">
           <div class="account-card__head"><div><div class="account-card__id">${esc(p.name)}</div><div class="account-card__label">v${esc(p.version)} · ${esc(p.description || '无说明')}</div></div><span class="plugin-card__state">${(p.enabled ?? []).filter((e) => e.enabled).length} 个账户启用</span></div>
           <div class="plugin-switches">${rows}</div>
-          <div class="plugin-actions">
-            <button class="button button--small button--outline" data-action="plugin-config" data-account="${esc(cfgAccount)}" data-plugin="${esc(p.name)}" ${cfgAccount ? '' : 'disabled'}><span class="button__inner"><span>配置</span></span></button>
-          </div>
-          <div class="plugin-config"${openPanels.has(cfgKey) ? '' : ' hidden'}>
+          <div class="plugin-config"${panelAccount ? '' : ' hidden'}>
             <div class="plugin-form" data-role="plugin-form"></div>
             <div class="form-actions">
-              <button class="button button--small" data-action="plugin-save" data-account="${esc(cfgAccount)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>保存</span></span></button>
+              <button class="button button--small" data-action="plugin-save" data-account="${esc(panelAccount)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>保存</span></span></button>
               <span class="hint"></span>
             </div>
           </div>
@@ -180,11 +177,11 @@ function renderPlugins(plugins, accounts) {
 }
 
 async function refillOpenPanels() {
-  for (const card of document.querySelectorAll('#plugin-cards .account-card')) {
-    const btn = card.querySelector('[data-action="plugin-config"]');
-    const box = card.querySelector('.plugin-config');
-    if (!btn || !btn.dataset.account || !box || box.hidden) continue;
-    const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(btn.dataset.account)}&name=${encodeURIComponent(btn.dataset.plugin)}`);
+  for (const box of document.querySelectorAll('#plugin-cards .plugin-config')) {
+    if (box.hidden) continue;
+    const save = box.querySelector('[data-action="plugin-save"]');
+    if (!save?.dataset.account) continue;
+    const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(save.dataset.account)}&name=${encodeURIComponent(save.dataset.plugin)}`);
     if (!box.hidden) renderPluginForm(box, res.data?.example ?? {}, res.data?.config ?? {});
   }
 }
@@ -494,16 +491,20 @@ document.addEventListener('click', async (ev) => {
     return;
   }
   if (action === 'plugin-config') {
-    const box = btn.closest('.account-card').querySelector('.plugin-config');
-    const key = `${btn.dataset.account}::${btn.dataset.plugin}`;
-    if (openPanels.has(key)) {
-      openPanels.delete(key);
+    const card = btn.closest('.account-card');
+    const box = card.querySelector('.plugin-config');
+    const save = box.querySelector('[data-action="plugin-save"]');
+    const plugin = btn.dataset.plugin;
+    const accId = btn.dataset.account;
+    if (!box.hidden && save?.dataset.account === accId) {
       box.hidden = true;
+      openPanels.delete(plugin);
       return;
     }
-    openPanels.add(key);
+    openPanels.set(plugin, accId);
+    if (save) save.dataset.account = accId;
     box.hidden = false;
-    const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(btn.dataset.account)}&name=${encodeURIComponent(btn.dataset.plugin)}`);
+    const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(accId)}&name=${encodeURIComponent(plugin)}`);
     if (!box.hidden) renderPluginForm(box, res.data?.example ?? {}, res.data?.config ?? {});
     return;
   }
