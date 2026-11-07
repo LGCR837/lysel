@@ -64,6 +64,7 @@ export class OldChatAdapter extends BaseAdapter {
   async start(): Promise<void> {
     const state = this.getState();
     this.deviceId = String(state.deviceId ?? '') || crypto.randomUUID();
+    if (this.deviceId !== state.deviceId) this.setState({ deviceId: this.deviceId });
     this.token = String(state.accessToken ?? '');
     this.refreshToken = String(state.refreshToken ?? '');
     this.selfId = String(state.selfId ?? '');
@@ -78,6 +79,7 @@ export class OldChatAdapter extends BaseAdapter {
       onEvent: (type, data, pts) => this.handleEvent(type, data, pts),
       onOpen: () => this.emitStatus(true),
       onClose: () => this.emitStatus(false),
+      onError: (info) => this.recover(info),
     });
     this.socket.start();
     this.log.info(`适配器已启动 ${this.selfId || this.deviceId}`);
@@ -159,6 +161,28 @@ export class OldChatAdapter extends BaseAdapter {
     this.selfId = String(res.user?.ncuid ?? res.user?.uid ?? this.selfId);
     this.setState({ selfId: this.selfId });
     this.log.info(`登录成功 ${this.selfId}`);
+  }
+
+  private recovering: Promise<void> | null = null;
+  private lastRecover = 0;
+
+  private recover(info: string): void {
+    const now = Date.now();
+    if (this.recovering || now - this.lastRecover < 60000) return;
+    this.lastRecover = now;
+    this.recovering = (async () => {
+      this.log.warn(`恢复凭据 ${info}`);
+      if (await this.renew()) {
+        this.log.info('凭据已续期');
+        return;
+      }
+      await this.signIn();
+      this.log.info('已重新登录');
+    })()
+      .catch((e: any) => this.log.error(`恢复凭据失败 ${e?.message ?? e}`))
+      .finally(() => {
+        this.recovering = null;
+      });
   }
 
   private async renew(): Promise<boolean> {

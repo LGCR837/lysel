@@ -11,6 +11,7 @@ export interface WsOptions {
   onEvent: (type: string, data: any, pts?: number) => void;
   onOpen?: () => void;
   onClose?: (code: number) => void;
+  onError?: (info: string) => void;
 }
 
 export class EventSocket {
@@ -35,9 +36,19 @@ export class EventSocket {
 
   private scheduleReconnect(): void {
     if (this.stopped) return;
-    log.warn(`连接断开，${this.reconnectDelay}ms 后重连`);
+    log.warn(`${this.reconnectDelay}ms 后重连`);
     this.timer = setTimeout(() => void this.connect(), this.reconnectDelay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+  }
+
+  private async diagnose(): Promise<string> {
+    try {
+      const res = await fetch(this.url());
+      const text = (await res.text()).slice(0, 120);
+      return `握手被拒 HTTP ${res.status} ${text}`;
+    } catch (e: any) {
+      return `握手失败 ${e?.message ?? e}`;
+    }
   }
 
   private url(): string {
@@ -84,10 +95,15 @@ export class EventSocket {
       this.opts.onClose?.(ev.code);
       if (this.stopped) return;
       this.opts.session?.reset();
+      log.warn(`连接断开 code=${ev.code}${ev.reason ? ` ${ev.reason}` : ''}`);
       this.scheduleReconnect();
     });
 
     socket.addEventListener('error', () => {
+      void this.diagnose().then((info) => {
+        log.warn(info);
+        this.opts.onError?.(info);
+      });
       try {
         socket.close();
       } catch {}
