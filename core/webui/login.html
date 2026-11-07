@@ -9,15 +9,18 @@
 <body class="login-body">
 <div class="site-background" aria-hidden="true">
   <picture class="site-background__picture">
-    <img class="site-background__image" src="/assets/reimu-wallpaper.jpg" alt="">
+    <img class="site-background__image" src="/assets/reimu-wallpaper.webp" alt="">
   </picture>
   <div class="site-background__shade"></div>
 </div>
 
 <main class="login">
+  <h1 class="login__title">Lysel Login</h1>
   <form class="login__panel" id="login-form">
-    <label class="field"><span>密钥</span><input id="login-key" type="password" autocomplete="current-password" required autofocus></label>
-    <button class="button" type="submit"><span class="button__inner"><span>进入</span><span class="button__arrow">↗</span></span></button>
+    <div class="login__row">
+      <input class="login__input" id="login-key" type="password" autocomplete="current-password" required autofocus>
+      <button class="button button--small" type="submit"><span class="button__inner"><span>进入</span></span></button>
+    </div>
     <p class="hint" id="login-hint"></p>
   </form>
 </main>
