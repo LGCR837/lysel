@@ -1,0 +1,7 @@
+{
+  "name": "baplugin",
+  "version": "1.0.0",
+  "description": "Blue Archive 工具箱：好感计算 / 抽卡模拟 / 官方漫画",
+  "author": "Aoharu Reverie",
+  "main": "index.ts"
+}

@@ -126,8 +126,42 @@ export class OldChatAdapter extends BaseAdapter {
     }
   }
 
-  async getUser(userId: string): Promise<UserInfo | null> {
-    const res = await this.http.request<any>('/v2/users/profile', { query: { uid: userId } });
+  /** 输入中状态，服务端 8 秒过期，插件需自行续租 */
+  async typing(peer: Peer, isTyping: boolean): Promise<void> {
+    // 服务端只认大写 UID / GRP-xxx，nc_ 开头的本地 id 无法上报
+    const id = String(peer.id ?? '').toUpperCase();
+    if (!/^[A-Z0-9-]{4,32}$/.test(id)) return;
+    const path = peer.scene === 'group' ? '/v2/groups/typing' : '/v2/chats/typing';
+    await this.http
+      .gateway('POST', path, { chat_id: id, is_typing: isTyping, is_group: peer.scene === 'group' })
+      .catch((e: any) => this.log.debug(`输入状态发送失败 ${e?.message ?? e}`));
+  }
+
+  /** 上传媒体，返回服务端相对地址（/v1/uploads/...） */
+  async upload(data: Uint8Array, mime: string, name = 'image.png'): Promise<string> {
+    const form = new FormData();
+    form.append('file', new Blob([data], { type: mime }), name);
+    const res = await fetch(new URL('/v1/media', this.origin), {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.token}` },
+      body: form,
+    });
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    if (!res.ok) {
+      throw new AdapterError(json?.message ?? `上传失败 ${res.status}`, String(json?.error ?? res.status), res.status);
+    }
+    const url = json?.url ?? json?.media_url ?? json?.data?.url;
+    if (!url) throw new AdapterError('上传未返回地址', 'upload_no_url');
+    return String(url);
+  }
+
+  async getUser(userId: string): Promise<UserInfo | null> {    const res = await this.http.request<any>('/v2/users/profile', { query: { uid: userId } });
     if (!res) return null;
     return {
       id: String(res.ncuid ?? res.uid ?? userId),

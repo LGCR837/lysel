@@ -91,6 +91,10 @@ export interface Adapter {
   stop(): Promise<void>;
   send(peer: Peer, seg: Segment[]): Promise<SendResult>;
   recall(peer: Peer, messageId: string): Promise<void>;
+  /** 发送输入中状态，不支持时静默 */
+  typing(peer: Peer, isTyping: boolean): Promise<void>;
+  /** 上传媒体到平台，返回可发送的 URL */
+  upload(data: Uint8Array, mime: string, name?: string): Promise<string>;
   getUser(userId: string): Promise<UserInfo | null>;
   getGroupMembers(groupId: string): Promise<Member[]>;
   native(): unknown;
@@ -147,8 +151,13 @@ export interface PluginContext {
   readonly storage: PluginStorage;
   send(peer: Peer | MessageEvent, seg: SegmentInput): Promise<SendResult>;
   reply(evt: MessageEvent, seg: SegmentInput): Promise<SendResult>;
+  /** 输入中指示，缺省 true，仅 oldchat 等支持 */
+  typing(target: Peer | MessageEvent, isTyping?: boolean): Promise<void>;
+  /** 上传图片等媒体，返回可直接放进 image 段落的 URL */
+  upload(data: Uint8Array, mime: string, name?: string): Promise<string>;
   recall(evt: MessageEvent): Promise<void>;
   getUser(userId: string): Promise<UserInfo | null>;
+  getGroupMembers(groupId: string): Promise<Member[]>;
   onMessage(h: MessageHandler): void;
   command(name: string, h: (args: string[], evt: MessageEvent) => unknown): void;
   native<T = unknown>(): T;

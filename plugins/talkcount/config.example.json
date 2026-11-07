@@ -1,0 +1,10 @@
+{
+  "wakeWords": ["Lysel"],
+  "topN": 15,
+  "commandAliases": ["发言排行榜", "信息排行榜", "消息排行榜"],
+  "autoReport": true,
+  "autoReportTime": "23:59",
+  "minDailyMessages": 15,
+  "saveIntervalMs": 60000,
+  "checkIntervalMs": 60000
+}

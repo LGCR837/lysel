@@ -50,11 +50,21 @@ export function createContext(deps: ContextDeps): PluginContext {
     reply(evt, seg) {
       return adapter.send(peerOf(evt), normalizeSegments(seg));
     },
+    async typing(target, isTyping = true) {
+      const peer = 'scene' in target ? peerOf(target as MessageEvent) : (target as Peer);
+      await adapter.typing(peer, isTyping);
+    },
+    upload(data, mime, name) {
+      return adapter.upload(data, mime, name);
+    },
     async recall(evt) {
       await adapter.recall(peerOf(evt), evt.id);
     },
     getUser(userId) {
       return adapter.getUser(userId);
+    },
+    getGroupMembers(groupId) {
+      return adapter.getGroupMembers(groupId);
     },
     onMessage(h: MessageHandler) {
       router.addMessage(name, h);

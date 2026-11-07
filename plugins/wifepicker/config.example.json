@@ -1,0 +1,9 @@
+{
+  "wakeWords": ["Lysel"],
+  "excludedUsers": [],
+  "mediaOrigin": "https://oc.mcl0.dpdns.org",
+  "autoGraph": true,
+  "autoGraphTime": "23:58",
+  "minDailyDraws": 5,
+  "avatarTimeout": 8000
+}

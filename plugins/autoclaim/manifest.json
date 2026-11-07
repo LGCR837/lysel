@@ -1,0 +1,7 @@
+{
+  "name": "autoclaim",
+  "version": "1.0.0",
+  "description": "自动抢红包（默认关闭）",
+  "author": "Aoharu Reverie",
+  "main": "index.ts"
+}

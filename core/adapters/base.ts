@@ -35,6 +35,13 @@ export abstract class BaseAdapter implements Adapter {
     throw new CapabilityError('recall');
   }
 
+  /** 平台无输入中接口时静默跳过，不打断插件 */
+  async typing(_peer: Peer, _isTyping: boolean): Promise<void> {}
+
+  async upload(_data: Uint8Array, _mime: string, _name?: string): Promise<string> {
+    throw new CapabilityError('upload');
+  }
+
   async getUser(_userId: string): Promise<UserInfo | null> {
     return null;
   }

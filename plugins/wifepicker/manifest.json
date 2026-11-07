@@ -1,0 +1,7 @@
+{
+  "name": "wifepicker",
+  "version": "2.0.0",
+  "description": "今日老婆：抽取 / 求婚 / 强娶 / 关系图，按群隔离",
+  "author": "Aoharu Reverie",
+  "main": "index.ts"
+}

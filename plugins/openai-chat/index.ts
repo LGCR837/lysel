@@ -32,6 +32,25 @@ export function onLoad(ctx: PluginContext) {
   const rateLimitPerMin = Math.max(1, count(ctx.config.rateLimitPerMin, 6));
   const rateLimitReply = String(ctx.config.rateLimitReply ?? '');
   const persist = ctx.config.persistHistory === true;
+  const typingEnabled = ctx.config.typing !== false;
+  const typingRefreshMs = Math.max(2000, count(ctx.config.typingRefreshMs, 5000));
+
+  /** 立刻发出输入中状态，等待期间按 TTL 续租，返回停止函数 */
+  const startTyping = (evt: MessageEvent): (() => void) => {
+    if (!typingEnabled) return () => {};
+    let alive = true;
+    void ctx.typing(evt, true).catch(() => {});
+    const timer = setInterval(() => {
+      if (alive) void ctx.typing(evt, true).catch(() => {});
+    }, typingRefreshMs);
+    timer.unref?.();
+    return () => {
+      if (!alive) return;
+      alive = false;
+      clearInterval(timer);
+      void ctx.typing(evt, false).catch(() => {});
+    };
+  };
 
   if (!apiKey) ctx.log.warn('未配置 apiKey，插件不响应');
 
@@ -156,10 +175,13 @@ export function onLoad(ctx: PluginContext) {
     hits.set(evt.sender.id, recent);
 
     const key = keyOf(evt);
+    // 收到即亮输入中状态，排队等待期间也要保持
+    const stopTyping = startTyping(evt);
     const prev = chains.get(key) ?? Promise.resolve();
     const next = prev
       .then(() => handle(evt, prompt, images))
-      .catch((e: any) => ctx.log.error(`对话处理失败 ${e?.message ?? e}`));
+      .catch((e: any) => ctx.log.error(`对话处理失败 ${e?.message ?? e}`))
+      .finally(stopTyping);
     chains.set(key, next);
     void next.finally(() => {
       if (chains.get(key) === next) chains.delete(key);

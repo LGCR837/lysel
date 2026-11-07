@@ -92,6 +92,11 @@ export class OneBot11Adapter extends BaseAdapter {
     await this.api.deleteMsg(messageId);
   }
 
+  /** OneBot 没有输入中接口，图片改走 base64 直发 */
+  async upload(data: Uint8Array, _mime: string, _name?: string): Promise<string> {
+    return `base64://${Buffer.from(data).toString('base64')}`;
+  }
+
   async getUser(userId: string): Promise<UserInfo | null> {
     const info = await this.api.strangerInfo(userId);
     if (!info) return null;

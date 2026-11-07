@@ -1,0 +1,7 @@
+{
+  "name": "talkcount",
+  "version": "1.0.0",
+  "description": "群发言次数统计与每日排行榜",
+  "author": "Aoharu Reverie",
+  "main": "index.ts"
+}

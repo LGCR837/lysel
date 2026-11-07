@@ -1,0 +1,4 @@
+{
+  "wakeWords": ["Lysel"],
+  "requireWakeInGroup": false
+}
