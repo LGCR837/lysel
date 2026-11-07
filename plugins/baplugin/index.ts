@@ -2,6 +2,7 @@
 import type { MessageEvent, PluginContext } from '../../core/types.ts';
 import { readBody, wakeWordsOf } from '../_shared/trigger.ts';
 import { parseFavorLevels, calculateNumer, matchStudent, renderFavorImg } from './favor.ts';
+import { setWarnHook } from './data.ts';
 import {
   ensureGachaData,
   gacha10,
@@ -32,6 +33,7 @@ function serverFromName(name: string): ServerId {
 export function onLoad(ctx: PluginContext) {
   const wakeWords = wakeWordsOf(ctx.config);
   const requireWake = ctx.config.requireWakeInGroup === true;
+  setWarnHook((msg) => ctx.log.warn(msg));
 
   void ensureGachaData().catch((e: any) => ctx.log.error(`初始化抽卡数据失败 ${e?.message ?? e}`));
 

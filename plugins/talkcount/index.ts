@@ -38,9 +38,16 @@ export function onLoad(ctx: PluginContext) {
     let items = data.ranking(date, groupId).slice(0, topN);
     if (!items.length) throw new Error('该日暂无发言记录');
     items = await resolveNames(groupId, items);
-    const png = renderLeaderboard({ title, dateText: date, total: data.total(date, groupId), items, topN });
-    const url = await ctx.upload(png, 'image/png', 'talkcount.png');
-    await ctx.send({ scene: 'group', id: groupId }, [{ type: 'image', url }]);
+    let stage = '渲染';
+    try {
+      const png = renderLeaderboard({ title, dateText: date, total: data.total(date, groupId), items, topN });
+      stage = '上传';
+      const url = await ctx.upload(png, 'image/png', 'talkcount.png');
+      stage = '发送';
+      await ctx.send({ scene: 'group', id: groupId }, [{ type: 'image', url }]);
+    } catch (e: any) {
+      throw new Error(`${stage}失败 ${e?.message ?? e}`);
+    }
   };
 
   const handleCommand = async (evt: MessageEvent): Promise<void> => {

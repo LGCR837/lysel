@@ -1,6 +1,6 @@
 // baplugin 好感计算：移植 sanae-code/favorability.ts + cal_favor.ts 图片渲染
 import { createCanvas, loadImage } from '@napi-rs/canvas';
-import { IMG_BASE, STU_ICON_BASE, ensureFont, loadRemote, getFavorData, getGiftList, getStudentMap } from './data.ts';
+import { IMG_BASE, ensureFont, tryLoad, getFavorData, getGiftList, getStudentMap } from './data.ts';
 
 // ---------- 经验表（与 favorability.ts 一致） ----------
 const expRequirement: { [key: number]: number } = {
@@ -171,16 +171,14 @@ export async function renderFavorImg(
       let ry = y + 40;
       let col = 0;
       for (const g of giftRows) {
-        try {
-          const icon = await loadRemote(`${IMG_BASE}/${g.Icon}.png`);
+        const icon = await tryLoad(`${IMG_BASE}/${g.Icon}.png`);
+        if (icon) {
           c.drawImage(icon, x, ry, 100, 80);
           const gname = giftNameMap.get(g.preId) || '';
           c.fillStyle = '#333333';
           c.font = `bold 24px ${font}`;
           c.fillText(g.matchCount >= 2 ? '微笑' : '普通', x, ry + 100);
           c.fillText(gname, x, ry + 130);
-        } catch {
-          // 图标加载失败则跳过
         }
         x += 270;
         col++;

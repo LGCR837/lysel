@@ -1,6 +1,6 @@
 // baplugin 抽卡模拟：移植 gacha_main.ts 的 gacha_10 / gacha_200 算法 + 图片渲染
 import { createCanvas, loadImage } from '@napi-rs/canvas';
-import { IMG_BASE, GACHA_IMG_BASE, ensureFont, loadRemote, getGachaData, getStudentMap } from './data.ts';
+import { IMG_BASE, GACHA_IMG_BASE, ensureFont, tryLoad, getGachaData, getStudentMap } from './data.ts';
 
 /** 服务器：0=日服 1=国际服 2=国服 */
 export type ServerId = 0 | 1 | 2;
@@ -186,18 +186,18 @@ export async function renderGacha10Img(
   const [ids, stars] = stu_gacha;
 
   const [bg, pickImg, printImg, backImgs] = await Promise.all([
-    loadRemote(`${IMG_BASE}/background.png`),
-    loadRemote(`${IMG_BASE}/pickup.png`),
-    loadRemote(`${IMG_BASE}/print_${serid}.png`),
+    tryLoad(`${IMG_BASE}/background.png`),
+    tryLoad(`${IMG_BASE}/pickup.png`),
+    tryLoad(`${IMG_BASE}/print_${serid}.png`),
     Promise.all([
-      loadRemote(`${IMG_BASE}/1sta.png`),
-      loadRemote(`${IMG_BASE}/1sta.png`),
-      loadRemote(`${IMG_BASE}/2sta.png`),
-      loadRemote(`${IMG_BASE}/3sta.png`),
+      tryLoad(`${IMG_BASE}/1sta.png`),
+      tryLoad(`${IMG_BASE}/1sta.png`),
+      tryLoad(`${IMG_BASE}/2sta.png`),
+      tryLoad(`${IMG_BASE}/3sta.png`),
     ]),
   ]);
 
-  c.drawImage(bg, 0, 0);
+  if (bg) c.drawImage(bg, 0, 0);
 
   let x = 100;
   let y = 100;
@@ -220,11 +220,11 @@ export async function renderGacha10Img(
     c.lineTo(x + move, y + move + 10);
     c.closePath();
     c.clip();
-    const stuImg = await loadRemote(`${GACHA_IMG_BASE}/${ids[i]}.png`);
-    c.drawImage(stuImg, x + move - 40, y + move, 280, 260);
+    const stuImg = await tryLoad(`${GACHA_IMG_BASE}/${ids[i]}.png`);
+    if (stuImg) c.drawImage(stuImg, x + move - 40, y + move, 280, 260);
     c.restore();
 
-    if (isPick) {
+    if (isPick && pickImg) {
       c.drawImage(pickImg, x + 50, y + 90);
     }
     x += 340;
@@ -236,7 +236,7 @@ export async function renderGacha10Img(
 
   c.font = `bold 50px ${font}`;
   c.fillStyle = '#FFFFFF';
-  c.drawImage(printImg, 1450, 980);
+  if (printImg) c.drawImage(printImg, 1450, 980);
   c.fillText(`${muzhu}`, 1650, 1090);
 
   return canvas.toBuffer('image/png');
@@ -280,24 +280,24 @@ export async function renderGacha200Img(
   const c = canvas.getContext('2d');
 
   const [bg, pickImg, backImgs] = await Promise.all([
-    loadRemote(`${IMG_BASE}/background.png`),
-    loadRemote(`${IMG_BASE}/pickup.png`),
+    tryLoad(`${IMG_BASE}/background.png`),
+    tryLoad(`${IMG_BASE}/pickup.png`),
     Promise.all([
-      loadRemote(`${IMG_BASE}/1sta.png`),
-      loadRemote(`${IMG_BASE}/1sta.png`),
-      loadRemote(`${IMG_BASE}/2sta_1.png`),
-      loadRemote(`${IMG_BASE}/3sta_1.png`),
+      tryLoad(`${IMG_BASE}/1sta.png`),
+      tryLoad(`${IMG_BASE}/1sta.png`),
+      tryLoad(`${IMG_BASE}/2sta_1.png`),
+      tryLoad(`${IMG_BASE}/3sta_1.png`),
     ]),
   ]);
 
-  c.drawImage(bg, 0, 0);
+  if (bg) c.drawImage(bg, 0, 0);
 
   const drawChar = async (id: number, star: number, x: number, y: number) => {
     const move = 109;
     const z = 42;
-    const stuImg = await loadRemote(`${GACHA_IMG_BASE}/${id}.png`);
+    const stuImg = await tryLoad(`${GACHA_IMG_BASE}/${id}.png`);
     c.save();
-    c.drawImage(backImgs[star], x * m, y * m + 5, 400 * m, 520 * m);
+    if (backImgs[star]) c.drawImage(backImgs[star], x * m, y * m + 5, 400 * m, 520 * m);
     c.beginPath();
     c.moveTo((x + move) * m, (y + move + 15) * m);
     c.lineTo((x + move + 236) * m, (y + move + 15) * m);
@@ -306,7 +306,7 @@ export async function renderGacha200Img(
     c.lineTo((x + move) * m, (y + move + 15) * m);
     c.closePath();
     c.clip();
-    c.drawImage(stuImg, (x + move - 40) * m, (y + move) * m, 280 * m, 260 * m);
+    if (stuImg) c.drawImage(stuImg, (x + move - 40) * m, (y + move) * m, 280 * m, 260 * m);
     c.restore();
   };
 
@@ -328,7 +328,7 @@ export async function renderGacha200Img(
     switch (s.star) {
       case 4: {
         await drawChar(s.stuid, s.star, x3p, y3);
-        c.drawImage(pickImg, x3p * m + 20, y3 * m + 41, 80, 28);
+        if (pickImg) c.drawImage(pickImg, x3p * m + 20, y3 * m + 41, 80, 28);
         c.fillText(`x${s.rep}`, x3p * m + x_move, y3 * m + y_move);
         x3p += 400;
         if (x3p > 4200) {

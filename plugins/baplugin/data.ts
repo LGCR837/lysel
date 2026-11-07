@@ -61,9 +61,32 @@ export function ensureFont(): string {
 }
 
 // ---------- 图片加载 ----------
-/** COS 可直连 */
-export function loadRemote(url: string) {
-  return loadImage(url);
+let warnHook: ((msg: string) => void) | null = null;
+
+/** 由插件入口注册日志，缺图时能定位到具体 URL */
+export function setWarnHook(fn: (msg: string) => void): void {
+  warnHook = fn;
+}
+
+const imgCache = new Map<string, any>();
+
+/** COS 可直连，成功即缓存 */
+export async function loadRemote(url: string): Promise<any> {
+  const hit = imgCache.get(url);
+  if (hit) return hit;
+  const img = await loadImage(url);
+  imgCache.set(url, img);
+  return img;
+}
+
+/** 单张图缺失不该打断整条命令，失败返回 null 并记一条 warn */
+export async function tryLoad(url: string): Promise<any | null> {
+  try {
+    return await loadRemote(url);
+  } catch (e: any) {
+    warnHook?.(`图片加载失败 ${e?.message ?? e} ${url}`);
+    return null;
+  }
 }
 
 /** 带 UA/Referer 下载（gamekee CDN 需要） */

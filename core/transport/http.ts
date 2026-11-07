@@ -38,9 +38,11 @@ export class OCHttp {
     });
     if (res && typeof res.code === 'number' && res.code >= 400) {
       const detail = (res as any).body;
+      // 服务端错误体是 {error, code}，错误文案在 error 字段
+      const message = detail?.error ?? detail?.message;
       throw new AdapterError(
-        detail?.message ?? `网关错误 ${res.code}`,
-        detail?.error ?? 'gateway_error',
+        message ? `${message} (${detail?.code ?? res.code})` : `网关错误 ${res.code}`,
+        detail?.code ?? 'gateway_error',
         res.code,
       );
     }
@@ -98,7 +100,7 @@ export class OCHttp {
 
     if (!res.ok) {
       const code = payload?.code ?? payload?.error ?? `http_${res.status}`;
-      const message = payload?.message ?? `请求失败 ${res.status}`;
+      const message = payload?.error ?? payload?.message ?? `请求失败 ${res.status}`;
       if (retry && (res.status === 401 || code === 'invalid_session')) {
         if (res.status === 401 && this.onUnauthorized) {
           const renewed = await this.onUnauthorized().catch(() => false);
