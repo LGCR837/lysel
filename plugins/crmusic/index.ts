@@ -173,25 +173,25 @@ async function sendCard(ctx: PluginContext, evt: MessageEvent, audioUrl: string,
 export function onLoad(ctx: PluginContext) {
   const pages = Math.min(50, Math.max(1, Number(ctx.config.pages) || 20));
   const maxList = Math.min(50, Math.max(1, Number(ctx.config.maxList) || 10));
-  const errorText = String(ctx.config.errorText ?? '搜索失败了');
+  const errorText = String(ctx.config.errorText ?? '猫猫晕乎乎的，溜号了喵~');
 
   const keyOf = (evt: MessageEvent) => `${evt.accountId}:${evt.sender.id}`;
 
   const doSearch = async (evt: MessageEvent, keyword: string): Promise<void> => {
     if (!keyword) {
-      await ctx.reply(evt, '用法 点歌 关键词');
+      await ctx.reply(evt, '想听什么喵~ 用法: 点歌 关键词');
       return;
     }
     try {
       const songs = await search(keyword, pages);
       if (!songs.length) {
-        await ctx.reply(evt, `没有找到 ${keyword}`);
+        await ctx.reply(evt, `喵呜…没找到和【${keyword}】有关的歌`);
         return;
       }
       const list = songs.slice(0, maxList);
       caches.set(keyOf(evt), list);
       const lines = list.map((s, i) => `${i + 1}. ${s.name}${s.artists.length ? ` - ${s.artists.join('/')}` : ''}`);
-      await ctx.reply(evt, `搜索 ${keyword}\n${lines.join('\n')}`);
+      await ctx.reply(evt, `帮喵找到这些喵~【${keyword}】\n${lines.join('\n')}`);
     } catch (e: any) {
       ctx.log.error(`搜索失败 ${e?.message ?? e}`);
       await ctx.reply(evt, errorText);
@@ -201,18 +201,18 @@ export function onLoad(ctx: PluginContext) {
   const doPlay = async (evt: MessageEvent, index: number): Promise<void> => {
     const list = caches.get(keyOf(evt));
     if (!list?.length) {
-      await ctx.reply(evt, '请先点歌搜索');
+      await ctx.reply(evt, '要先「点歌 关键词」搜一下喵~');
       return;
     }
     if (!Number.isFinite(index) || index < 1 || index > list.length) {
-      await ctx.reply(evt, `序号范围 1 到 ${list.length}`);
+      await ctx.reply(evt, `没有第 ${index} 首喵~ 只能选 1~${list.length}`);
       return;
     }
     const song = list[index - 1];
     try {
       const url = await resolveUrl(song.id);
       if (!url) {
-        await ctx.reply(evt, '拿不到播放地址');
+        await ctx.reply(evt, '这首歌的播放地址拿不到喵…换一首试试？');
         return;
       }
       // 先语音再卡片，与原插件一致
@@ -234,13 +234,17 @@ export function onLoad(ctx: PluginContext) {
     const hit = ctx.prefixes.find((p) => p && raw.startsWith(p));
     const body = (hit ? raw.slice(hit.length) : raw).trim();
 
-    const searchMatch = body.match(/^点歌[\s：:]*(.+)$/);
+    const searchMatch = body.match(/^点歌[\s：:]*(.*)$/);
     if (searchMatch) {
       void doSearch(evt, searchMatch[1].trim());
       return;
     }
-    const playMatch = body.match(/^播放[\s：:]*(\d+)$/);
-    if (playMatch) void doPlay(evt, Number(playMatch[1]));
+    const playMatch = body.match(/^播放[\s：:]*(\d+)?$/);
+    if (playMatch) {
+      const index = playMatch[1];
+      if (index === undefined) void ctx.reply(evt, '要说播放几号喵~ 例如: 播放 1');
+      else void doPlay(evt, Number(index));
+    }
   });
 
   ctx.log.info(`已就绪 前缀可选 ${ctx.prefixes.join(' ') || '未配置'}`);
