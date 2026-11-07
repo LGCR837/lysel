@@ -8,6 +8,7 @@ export const DEFAULT_GLOBAL: GlobalConfig = {
   commandPrefix: '!',
   prefixes: ['/', '!', '#'],
   consolePassword: '',
+  hotReload: true,
   webui: { enabled: true, host: '127.0.0.1', port: 7520 },
   plugins: {},
 };
@@ -90,15 +91,20 @@ export function writeAccountState(id: string, state: Record<string, unknown>): v
   writeJson(path.join(accountDir(id), 'state.json'), state);
 }
 
+export function readPluginManifest(name: string): PluginManifest | null {
+  const manifestPath = path.join(PLUGINS_DIR, name, 'manifest.json');
+  const manifest = readJson<PluginManifest>(manifestPath);
+  if (!manifest) return null;
+  return { ...manifest, name: manifest.name ?? name };
+}
+
 export function listPlugins(): PluginManifest[] {
   if (!fs.existsSync(PLUGINS_DIR)) return [];
   const out: PluginManifest[] = [];
   for (const entry of fs.readdirSync(PLUGINS_DIR, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const manifestPath = path.join(PLUGINS_DIR, entry.name, 'manifest.json');
-    const manifest = readJson<PluginManifest>(manifestPath);
-    if (!manifest) continue;
-    out.push({ ...manifest, name: manifest.name ?? entry.name });
+    const manifest = readPluginManifest(entry.name);
+    if (manifest) out.push(manifest);
   }
   return out;
 }

@@ -5,7 +5,7 @@ export type Segment =
   | { type: 'at'; id: string; name?: string }
   | { type: 'reply'; id: string }
   | { type: 'image'; url?: string; file?: string }
-  | { type: 'voice'; url?: string }
+  | { type: 'voice'; url?: string; duration?: number }
   | { type: 'video'; url?: string }
   | { type: 'face'; id?: string }
   | { type: 'file'; url?: string; name?: string };
@@ -122,6 +122,8 @@ export interface GlobalConfig {
   /** 插件可选剥离的前缀，框架不强制 */
   prefixes: string[];
   consolePassword: string;
+  /** 插件代码变更自动重载 */
+  hotReload: boolean;
   webui: { enabled: boolean; host: string; port: number };
   plugins: Record<string, Record<string, unknown>>;
 }

@@ -1,7 +1,7 @@
 import { createLogger } from '../log.ts';
 import { Dispatcher } from '../dispatcher.ts';
 import { Router } from '../router.ts';
-import { resolvePluginConfig } from '../config/loader.ts';
+import { resolvePluginConfig, readPluginManifest } from '../config/loader.ts';
 import type {
   AccountConfig,
   AccountRef,
@@ -61,6 +61,10 @@ export class AccountRuntime {
     return global !== false;
   }
 
+  has(name: string): boolean {
+    return this.mounted.has(name);
+  }
+
   async mountAll(manifests: PluginManifest[]): Promise<void> {
     for (const manifest of manifests) {
       try {
@@ -71,7 +75,7 @@ export class AccountRuntime {
     }
   }
 
-  async mount(manifest: PluginManifest): Promise<void> {
+  async mount(manifest: PluginManifest, preloaded?: PluginModule): Promise<void> {
     const name = manifest.name;
     if (this.mounted.has(name)) return;
     if (!this.isEnabled(name)) {
@@ -100,7 +104,7 @@ export class AccountRuntime {
       schedule: (id, ms, fn) => this.schedule(name, id, ms, fn),
     });
 
-    const module = await importPlugin(name, manifest);
+    const module = preloaded ?? (await importPlugin(name, manifest));
     await module.onLoad?.(context);
     this.mounted.set(name, { manifest, module, context });
     log.info(`已加载 v${manifest.version}`);
@@ -130,6 +134,14 @@ export class AccountRuntime {
     if (!manifest) return;
     await this.unmount(name);
     await this.mount(manifest);
+  }
+
+  /** 用磁盘上的最新 manifest 重载，代码与元数据同时生效 */
+  async reloadWith(manifest: PluginManifest): Promise<void> {
+    // 先导入新代码：失败时旧插件仍在运行，避免热重载把插件弄丢
+    const module = await importPlugin(manifest.name, manifest);
+    await this.unmount(manifest.name);
+    await this.mount(manifest, module);
   }
 
   dispatch(evt: MessageEvent): void {
@@ -187,6 +199,42 @@ export class PluginHost {
 
   get(accountId: string): AccountRuntime | undefined {
     return this.runtimes.get(accountId);
+  }
+
+  /**
+   * 按磁盘内容重载单个插件：代码、manifest 同步刷新。
+   * 目录消失则从清单移除并卸载；此前未挂载该插件的账户保持不动。
+   */
+  async reloadPlugin(name: string): Promise<'reloaded' | 'removed' | 'skipped'> {
+    const manifest = readPluginManifest(name);
+    const index = this.manifests.findIndex((m) => m.name === name);
+
+    if (!manifest) {
+      if (index >= 0) this.manifests.splice(index, 1);
+      let touched = false;
+      for (const runtime of this.runtimes.values()) {
+        if (runtime.has(name)) {
+          await runtime.unmount(name);
+          touched = true;
+        }
+      }
+      return touched ? 'removed' : 'skipped';
+    }
+
+    if (index >= 0) this.manifests[index] = manifest;
+    else this.manifests.push(manifest);
+
+    let touched = false;
+    for (const runtime of this.runtimes.values()) {
+      if (!runtime.has(name)) continue;
+      try {
+        await runtime.reloadWith(manifest);
+        touched = true;
+      } catch (e: any) {
+        this.log.error(`${name} 热重载失败，保留旧版本`, e?.message ?? e);
+      }
+    }
+    return touched ? 'reloaded' : 'skipped';
   }
 
   all(): AccountRuntime[] {

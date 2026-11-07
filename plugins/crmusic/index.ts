@@ -21,6 +21,7 @@ interface Song {
   artists: string[];
   album: string;
   picUrl: string;
+  duration: number;
 }
 
 const caches = new Map<string, Song[]>();
@@ -89,12 +90,14 @@ async function weapi(url: string, params: unknown): Promise<any> {
 
 function normalize(raw: any): Song | null {
   if (!raw?.id) return null;
+  const pic = String(raw.al?.picUrl ?? '');
   return {
     id: String(raw.id),
     name: String(raw.name ?? ''),
     artists: (raw.ar ?? []).map((a: any) => a.name).filter(Boolean),
     album: String(raw.al?.name ?? ''),
-    picUrl: String(raw.al?.picUrl ?? ''),
+    picUrl: pic ? pic.replace(/^http:\/\//i, 'https://') : '',
+    duration: Number(raw.dt ?? raw.duration ?? 0),
   };
 }
 
@@ -108,27 +111,51 @@ async function resolveUrl(id: string, br = 320): Promise<string> {
   const item = data?.data?.[0] ?? {};
   if (item.uf?.url) item.url = item.uf.url;
   const isVip = Number(item.fee || 0) === 1 && Number(item.payed || 0) === 0;
-  if ((isVip || item.freeTrialInfo) && item.url) {
+  if (!item.url || isVip || item.freeTrialInfo) {
     try {
       const res = await fetch(`https://music-api.gdstudio.xyz/api.php?types=url&source=netease&id=${id}&br=${br}`);
       const json: any = await res.json();
-      if (json?.url) return String(json.url);
+      if (json?.url) return String(json.url).replace(/^http:\/\//i, 'https://');
     } catch {}
   }
-  return String(item.url ?? '');
+  return String(item.url ?? '').replace(/^http:\/\//i, 'https://');
 }
 
-async function sendCard(ctx: PluginContext, evt: MessageEvent, audioUrl: string, thumb: string, body: string): Promise<void> {
+function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '';
+  const total = Math.floor(ms / 1000);
+  return `${String(Math.min(99, Math.floor(total / 60))).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+/** OldChat 音乐卡片文本，按客户端 MusicShareInfo 的标签行格式排版 */
+function cardText(song: Song): string {
+  const lines = [`歌曲: ${song.name}`];
+  if (song.artists.length) lines.push(`歌手: ${song.artists.join('/')}`);
+  const duration = formatDuration(song.duration);
+  if (duration) lines.push(`时长: ${duration}`);
+  if (song.picUrl) lines.push(`封面: ${song.picUrl}`);
+  lines.push(`歌曲ID: ${song.id}`);
+  lines.push(`歌词: ${CRMUSIC_API}?types=lyric&id=${song.id}&raw=1`);
+  lines.push('点击播放');
+  return lines.join('\n');
+}
+
+async function sendCard(ctx: PluginContext, evt: MessageEvent, audioUrl: string, thumb: string, text: string): Promise<void> {
   if (ctx.account.platform !== 'oldchat') return;
+  if (audioUrl.length > 1024) {
+    ctx.log.warn(`播放地址超过 1024 字符 跳过音乐卡片 ${audioUrl.length}`);
+    return;
+  }
   try {
     const native = ctx.native<{ gateway: (method: string, path: string, payload?: unknown) => Promise<unknown> }>();
-    const extra = { body, msg_type: 'resource', media_url: audioUrl, thumb_url: thumb, duration_ms: 0 };
+    const body = JSON.stringify({ v: 2, text, media_kind: 'music' });
+    const extra = { body, msg_type: 'resource', media_url: audioUrl, thumb_url: thumb };
     const payload = evt.scene === 'group'
       ? { group_id: evt.peerId, ...extra }
       : { ...(evt.peerId.startsWith('nc_') ? { to_ncuid: evt.peerId } : { to_uid: evt.peerId }), ...extra };
     await native.gateway('POST', evt.scene === 'group' ? '/v2/groups/message/send' : '/v2/direct/send', payload);
   } catch (e: any) {
-    ctx.log.debug(`音乐卡片发送失败 ${e?.message ?? e}`);
+    ctx.log.warn(`音乐卡片发送失败 ${e?.message ?? e}`);
   }
 }
 
@@ -177,16 +204,13 @@ export function onLoad(ctx: PluginContext) {
         await ctx.reply(evt, '拿不到播放地址');
         return;
       }
-      await ctx.send(evt, [{ type: 'voice', url }]);
-      const lines = [`歌曲 ${song.name}`];
-      if (song.artists.length) lines.push(`歌手 ${song.artists.join('/')}`);
-      if (song.album) lines.push(`专辑 ${song.album}`);
-      if (song.picUrl) lines.push(`封面 ${song.picUrl}`);
-      lines.push(`歌词 ${CRMUSIC_API}?types=lyric&id=${song.id}&raw=1`);
-      const text = lines.join('\n');
+      const text = cardText(song);
       await ctx.reply(evt, text);
-      const card = JSON.stringify({ v: 2, text, media_kind: 'music', audio_url: url, url });
-      await sendCard(ctx, evt, url, song.picUrl, card);
+      if (ctx.account.platform === 'oldchat') {
+        await sendCard(ctx, evt, url, song.picUrl, text);
+      } else {
+        await ctx.send(evt, [{ type: 'voice', url }]);
+      }
     } catch (e: any) {
       ctx.log.error(`播放失败 ${e?.message ?? e}`);
       await ctx.reply(evt, errorText);

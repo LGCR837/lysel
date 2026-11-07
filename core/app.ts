@@ -17,6 +17,7 @@ import {
   writeAccountState,
 } from './config/loader.ts';
 import { PluginHost } from './plugin/host.ts';
+import { PluginWatcher } from './plugin/watch.ts';
 import { createAdapter, knownPlatforms } from './adapters/registry.ts';
 import { startWebUi } from './webui/server.ts';
 import { VERSION } from './version.ts';
@@ -31,6 +32,7 @@ export class App {
   host!: PluginHost;
   adapters = new Map<string, Adapter>();
   accounts = new Map<string, AccountConfig>();
+  private watcher: PluginWatcher | null = null;
   private messages = 0;
 
   async start(): Promise<void> {
@@ -75,6 +77,11 @@ export class App {
         checkKey: (key) => this.checkKey(key),
         consoleKey: () => this.global.consolePassword ?? '',
       });
+    }
+
+    if (this.global.hotReload !== false) {
+      this.watcher = new PluginWatcher(this.host, createLogger('watch'));
+      this.watcher.start();
     }
   }
 
@@ -187,6 +194,8 @@ export class App {
   }
 
   async stop(): Promise<void> {
+    this.watcher?.stop();
+    this.watcher = null;
     for (const adapter of this.adapters.values()) {
       try {
         await adapter.stop();

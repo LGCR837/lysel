@@ -52,6 +52,7 @@ export interface EncodedMessage {
   msgType: string;
   mediaUrl: string;
   thumbUrl: string;
+  durationMs: number;
 }
 
 export function encodeSegments(segments: Segment[]): EncodedMessage {
@@ -59,6 +60,7 @@ export function encodeSegments(segments: Segment[]): EncodedMessage {
   let mediaType = 'text';
   let mediaUrl = '';
   let thumbUrl = '';
+  let durationMs = 0;
   let quote: { id: string } | undefined;
   const mentions: { uid?: string; ncuid?: string; name?: string }[] = [];
 
@@ -80,6 +82,7 @@ export function encodeSegments(segments: Segment[]): EncodedMessage {
       case 'video':
         mediaType = seg.type;
         mediaUrl = seg.url ?? (seg as { file?: string }).file ?? '';
+        if (seg.type === 'voice') durationMs = Number(seg.duration) || 0;
         break;
       case 'file':
         mediaType = 'resource';
@@ -89,14 +92,14 @@ export function encodeSegments(segments: Segment[]): EncodedMessage {
   }
 
   if (mediaType !== 'text') {
-    return { body: text, msgType: mediaType, mediaUrl, thumbUrl };
+    return { body: text, msgType: mediaType, mediaUrl, thumbUrl, durationMs };
   }
   if (!quote && mentions.length === 0) {
-    return { body: text, msgType: 'text', mediaUrl: '', thumbUrl: '' };
+    return { body: text, msgType: 'text', mediaUrl: '', thumbUrl: '', durationMs: 0 };
   }
 
   const payload: OCPayload = { v: 2, text };
   if (quote) payload.quote = quote;
   if (mentions.length) payload.mentions = mentions;
-  return { body: JSON.stringify(payload), msgType: 'text', mediaUrl: '', thumbUrl };
+  return { body: JSON.stringify(payload), msgType: 'text', mediaUrl: '', thumbUrl: '', durationMs: 0 };
 }
