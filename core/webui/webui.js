@@ -11,9 +11,14 @@ let current = 'dashboard';
 let selectedAccount = ALL;
 let statusData = null;
 let configData = null;
-let lastLogCount = 0;
+let lastLogSig = '';
 let accountEditorMode = 'new';
 let accountDraft = null;
+let sigAccounts = '';
+let sigPlugins = '';
+let sigGlobal = '';
+const openPanels = new Set();
+let revealObserver = null;
 
 const PLATFORM_FIELDS = {
   oldchat: [
@@ -84,19 +89,22 @@ function setView(name) {
 
 function observeReveals() {
   const items = document.querySelectorAll('.view.is-active .reveal:not(.is-visible)');
+  if (!items.length) return;
   if (!('IntersectionObserver' in window)) {
     items.forEach((el) => el.classList.add('is-visible'));
     return;
   }
-  const observer = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('is-visible');
-        observer.unobserve(entry.target);
+  if (!revealObserver) {
+    revealObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible');
+          revealObserver.unobserve(entry.target);
+        }
       }
-    }
-  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
-  items.forEach((el) => observer.observe(el));
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+  }
+  items.forEach((el) => revealObserver.observe(el));
 }
 
 function rowLeft(name, sub) {
@@ -114,8 +122,9 @@ function renderAccounts(accounts) {
           <div><dt>COMMANDS</dt><dd>${a.commandCount ?? 0}</dd></div>
         </dl>
         <div class="account-actions">
-          <button class="button button--small ${a.online ? 'button--on' : ''}" data-action="account-start" data-id="${esc(a.id)}"><span class="button__inner"><span>启动</span></span></button>
-          <button class="button button--small ${!a.online ? 'button--on' : ''}" data-action="account-stop" data-id="${esc(a.id)}"><span class="button__inner"><span>停止</span></span></button>
+          ${a.online
+            ? `<button class="button button--small button--on" data-action="account-stop" data-id="${esc(a.id)}"><span class="button__inner"><span>停止</span></span></button>`
+            : `<button class="button button--small button--on" data-action="account-start" data-id="${esc(a.id)}"><span class="button__inner"><span>启动</span></span></button>`}
           <button class="button button--small button--outline" data-action="account-edit" data-id="${esc(a.id)}"><span class="button__inner"><span>编辑</span></span></button>
         </div>
       </article>`).join('')
@@ -139,20 +148,22 @@ function renderPlugins(plugins, accounts) {
               return `<div class="plugin-switch-row">
                 <span class="plugin-switch-row__name">${esc(accId)}</span>
                 <div class="plugin-switch-row__actions">
-                  <button class="button button--small ${on ? 'button--on' : ''}" data-action="plugin-start" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>启动</span></span></button>
-                  <button class="button button--small ${!on ? 'button--on' : ''}" data-action="plugin-stop" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>停止</span></span></button>
+                  ${on
+                    ? `<button class="button button--small button--on" data-action="plugin-stop" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>停止</span></span></button>`
+                    : `<button class="button button--small button--on" data-action="plugin-start" data-account="${esc(accId)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>启动</span></span></button>`}
                 </div>
               </div>`;
             }).join('')
           : '<p class="empty">暂无账户</p>';
         const cfgAccount = scoped[0] ?? '';
+        const cfgKey = `${cfgAccount}::${p.name}`;
         return `<article class="account-card reveal" data-delay="${Math.min(i + 1, 7)}">
           <div class="account-card__head"><div><div class="account-card__id">${esc(p.name)}</div><div class="account-card__label">v${esc(p.version)} · ${esc(p.description || '无说明')}</div></div><span class="plugin-card__state">${(p.enabled ?? []).filter((e) => e.enabled).length} 个账户启用</span></div>
           <div class="plugin-switches">${rows}</div>
           <div class="plugin-actions">
             <button class="button button--small button--outline" data-action="plugin-config" data-account="${esc(cfgAccount)}" data-plugin="${esc(p.name)}" ${cfgAccount ? '' : 'disabled'}><span class="button__inner"><span>配置</span></span></button>
           </div>
-          <div class="plugin-config" hidden>
+          <div class="plugin-config"${openPanels.has(cfgKey) ? '' : ' hidden'}>
             <div class="plugin-form" data-role="plugin-form"></div>
             <div class="form-actions">
               <button class="button button--small" data-action="plugin-save" data-account="${esc(cfgAccount)}" data-plugin="${esc(p.name)}"><span class="button__inner"><span>保存</span></span></button>
@@ -162,15 +173,35 @@ function renderPlugins(plugins, accounts) {
         </article>`;
       }).join('')
     : '<p class="empty">暂无插件</p>';
+  void refillOpenPanels();
+}
+
+async function refillOpenPanels() {
+  for (const card of document.querySelectorAll('#plugin-cards .account-card')) {
+    const btn = card.querySelector('[data-action="plugin-config"]');
+    const box = card.querySelector('.plugin-config');
+    if (!btn || !box || box.hidden) continue;
+    const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(btn.dataset.account)}&name=${encodeURIComponent(btn.dataset.plugin)}`);
+    if (!box.hidden) renderPluginForm(box, res.data?.example ?? {}, res.data?.config ?? {});
+  }
 }
 
 function renderSettings(cfg) {
-  $('cfg-logLevel').value = cfg.logLevel ?? 'info';
-  $('cfg-commandPrefix').value = cfg.commandPrefix ?? '!';
-  $('cfg-webuiEnabled').value = String(cfg.webui?.enabled !== false);
-  $('cfg-host').value = cfg.webui?.host ?? '127.0.0.1';
-  $('cfg-port').value = cfg.webui?.port ?? 7520;
-  $('cfg-key').value = consoleKey();
+  const sig = JSON.stringify([cfg.logLevel, cfg.commandPrefix, cfg.webui]);
+  if (sig === sigGlobal) return;
+  sigGlobal = sig;
+  const set = (id, value) => {
+    const el = $(id);
+    if (!el || el === document.activeElement) return;
+    if (el.value === String(value)) return;
+    el.value = value;
+  };
+  set('cfg-logLevel', cfg.logLevel ?? 'info');
+  set('cfg-commandPrefix', cfg.commandPrefix ?? '!');
+  set('cfg-webuiEnabled', String(cfg.webui?.enabled !== false));
+  set('cfg-host', cfg.webui?.host ?? '127.0.0.1');
+  set('cfg-port', cfg.webui?.port ?? 7520);
+  if (consoleKey()) set('cfg-key', consoleKey());
   $('settings-note').textContent = `Lysel ${statusData?.version ?? ''} · 控制台密钥仅在配置文件中设置，网页不提供修改。端口与监听地址改动需重启生效。`;
 }
 
@@ -193,14 +224,6 @@ function renderStatus(data) {
   $('side-dot').classList.toggle('is-offline', online === 0);
   $('side-status-text').textContent = online ? `${online} 个账户在线` : '暂无在线账户';
 
-  $('dash-accounts').innerHTML = accounts.length
-    ? accounts.map((a) => `<div class="list-row">${rowLeft(a.id, `${a.platform} / ${a.label}`)}<span class="tag ${a.online ? 'tag--pink' : 'tag--dim'}">${a.online ? '在线' : '离线'}</span><span class="tag">${a.pluginCount ?? 0} 插件</span></div>`).join('')
-    : '<p class="empty">暂无账户，在账户页添加配置</p>';
-
-  $('dash-plugins').innerHTML = plugins.length
-    ? plugins.map((p) => `<div class="list-row">${rowLeft(p.name, p.description || '无说明')}<span class="tag">v${esc(p.version)}</span><span class="tag ${(p.enabled ?? []).some((e) => e.enabled) ? 'tag--pink' : 'tag--dim'}">${(p.enabled ?? []).filter((e) => e.enabled).length} 账户</span></div>`).join('')
-    : '<p class="empty">暂无插件，在 plugins/ 下添加插件目录</p>';
-
   const mem = data.memory ?? {};
   $('dash-env').innerHTML = [
     ['VERSION', data.version ?? '-'],
@@ -209,17 +232,40 @@ function renderStatus(data) {
     ['LOG LEVEL', data.config?.logLevel ?? '-'],
   ].map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('');
 
-  renderAccounts(accounts);
-  renderPlugins(plugins, accounts);
+  const accSig = JSON.stringify(accounts);
+  if (accSig !== sigAccounts) {
+    sigAccounts = accSig;
+    $('dash-accounts').innerHTML = accounts.length
+      ? accounts.map((a) => `<div class="list-row">${rowLeft(a.id, `${a.platform} / ${a.label}`)}<span class="tag ${a.online ? 'tag--pink' : 'tag--dim'}">${a.online ? '在线' : '离线'}</span><span class="tag">${a.pluginCount ?? 0} 插件</span></div>`).join('')
+      : '<p class="empty">暂无账户，在账户页添加配置</p>';
+    renderAccounts(accounts);
+    observeReveals();
+  }
+
+  const pluginSig = JSON.stringify([plugins, accounts.map((a) => a.id), selectedAccount]);
+  if (pluginSig !== sigPlugins) {
+    sigPlugins = pluginSig;
+    $('dash-plugins').innerHTML = plugins.length
+      ? plugins.map((p) => `<div class="list-row">${rowLeft(p.name, p.description || '无说明')}<span class="tag">v${esc(p.version)}</span><span class="tag ${(p.enabled ?? []).some((e) => e.enabled) ? 'tag--pink' : 'tag--dim'}">${(p.enabled ?? []).filter((e) => e.enabled).length} 账户</span></div>`).join('')
+      : '<p class="empty">暂无插件，在 plugins/ 下添加插件目录</p>';
+    renderPlugins(plugins, accounts);
+    observeReveals();
+  }
+
   renderSettings(data.config ?? {});
-  observeReveals();
 }
 
-async function loadStatus(btn) {
+async function loadStatus(btn, force) {
   if (btn) btn.classList.add('is-busy');
   try {
     const res = await api('GET', '/api/status');
-    if (res.ok) renderStatus(res.data);
+    if (res.ok) {
+      if (force) {
+        sigAccounts = '';
+        sigPlugins = '';
+      }
+      renderStatus(res.data);
+    }
   } catch {
     $('side-dot').classList.add('is-offline');
     $('side-status-text').textContent = '连接失败';
@@ -240,8 +286,10 @@ async function loadLogs() {
     if (!res.ok) return;
     const lines = res.data?.lines ?? [];
     $('log-count').textContent = `${lines.length} LINES`;
-    if (lines.length === lastLogCount) return;
-    lastLogCount = lines.length;
+    const last = lines[lines.length - 1];
+    const sig = `${lines.length}|${last?.time ?? ''}|${last?.text ?? ''}`;
+    if (sig === lastLogSig) return;
+    lastLogSig = sig;
     const terminal = $('terminal');
     const atBottom = terminal.scrollTop + terminal.clientHeight >= terminal.scrollHeight - 40;
     terminal.innerHTML = lines.map((l) => `<div class="log-line log-line--${esc(l.level)}"><span class="log-line__time">${esc(l.time)}</span><span class="log-line__level">${esc(l.level.toUpperCase())}</span><span class="log-line__text">${esc(l.scope ? `[${l.scope}] ` : '')}${esc(l.text)}</span></div>`).join('');
@@ -396,11 +444,13 @@ document.addEventListener('click', async (ev) => {
 
   if (action === 'tab') {
     selectedAccount = btn.dataset.id;
+    sigPlugins = '';
     renderPlugins(statusData?.plugins ?? [], statusData?.accounts ?? []);
     return;
   }
   if (action === 'refresh') {
-    await loadStatus($('refresh-button'));
+    await loadStatus($('refresh-button'), true);
+    if (current === 'logs') await loadLogs();
     return;
   }
   if (action === 'account-start' || action === 'account-stop') {
@@ -444,11 +494,16 @@ document.addEventListener('click', async (ev) => {
   }
   if (action === 'plugin-config') {
     const box = btn.closest('.account-card').querySelector('.plugin-config');
-    box.hidden = !box.hidden;
-    if (!box.hidden) {
-      const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(btn.dataset.account)}&name=${encodeURIComponent(btn.dataset.plugin)}`);
-      renderPluginForm(box, res.data?.example ?? {}, res.data?.config ?? {});
+    const key = `${btn.dataset.account}::${btn.dataset.plugin}`;
+    if (openPanels.has(key)) {
+      openPanels.delete(key);
+      box.hidden = true;
+      return;
     }
+    openPanels.add(key);
+    box.hidden = false;
+    const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(btn.dataset.account)}&name=${encodeURIComponent(btn.dataset.plugin)}`);
+    if (!box.hidden) renderPluginForm(box, res.data?.example ?? {}, res.data?.config ?? {});
     return;
   }
   if (action === 'plugin-save') {
@@ -502,6 +557,6 @@ window.addEventListener('hashchange', () => setView(location.hash.replace('#', '
 
 setView(location.hash.replace('#', '') || 'dashboard');
 loadStatus();
-setInterval(() => loadStatus(), 5000);
-setInterval(() => { if (current === 'logs' || document.visibilityState === 'hidden') return; loadLogs(); }, 2500);
-setInterval(() => { if (statusData) $('uptime-value').textContent = fmtUptime(statusData.uptime + (Date.now() - statusData.at)); }, 1000);
+setInterval(() => {
+  if (statusData) $('uptime-value').textContent = fmtUptime(statusData.uptime + (Date.now() - statusData.at));
+}, 1000);
