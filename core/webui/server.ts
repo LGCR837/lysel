@@ -12,7 +12,7 @@ export interface WebUiDeps {
   config: () => unknown;
   toggle: (accountId: string, name: string, enabled: boolean) => Promise<boolean>;
   saveGlobal: (patch: Record<string, unknown>) => boolean;
-  saveAccount: (config: any) => boolean;
+  saveAccount: (config: any) => Promise<boolean>;
   accountState: (id: string, running: boolean) => Promise<boolean>;
   pluginConfig: (accountId: string, name: string) => unknown;
   savePluginConfig: (accountId: string, name: string, config: Record<string, unknown>) => Promise<boolean>;
@@ -97,7 +97,7 @@ export function startWebUi(host: string, port: number, deps: WebUiDeps): http.Se
     }
     if (pathname === '/api/config/account' && req.method === 'PUT') {
       const body = await jsonBody(req);
-      sendJson(res, { ok: deps.saveAccount(body) });
+      sendJson(res, { ok: await deps.saveAccount(body) });
       return;
     }
     if (pathname === '/api/accounts/state' && req.method === 'POST') {

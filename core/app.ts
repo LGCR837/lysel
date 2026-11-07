@@ -54,24 +54,7 @@ export class App {
         this.log.info(`${id} 已禁用，跳过`);
         continue;
       }
-      ensureAccountRuntime(id);
-      const adapter = createAdapter(
-        account,
-        () => readAccountState(id),
-        (patch) => writeAccountState(id, { ...readAccountState(id), ...patch }),
-      );
-      if (!adapter) {
-        this.log.error(`${id} 平台不支持: ${account.platform}`);
-        continue;
-      }
-      this.accounts.set(id, account);
-      this.adapters.set(id, adapter);
-      await this.host.attach(account, adapter);
-      adapter.onMessage((evt) => {
-        this.messages++;
-        this.builtinCommand(adapter, evt);
-      });
-      void adapter.start().catch((e: any) => this.log.error(`${id} 启动失败`, e?.message ?? e));
+      await this.attachAccount(account);
     }
 
     if (this.global.webui.enabled) {
@@ -144,11 +127,13 @@ export class App {
     return true;
   }
 
-  saveAccountFromWeb(raw: AccountConfig): boolean {
+  async saveAccountFromWeb(raw: AccountConfig): Promise<boolean> {
     if (!raw || !raw.id || !raw.platform) return false;
+    const wasOnline = Boolean(this.adapters.get(raw.id)?.status().online);
     saveAccountConfig(raw);
-    const loaded = this.accounts.get(raw.id);
-    if (loaded) Object.assign(loaded, raw);
+    await this.detachAccount(raw.id);
+    const fresh = loadAccount(raw.id);
+    if (fresh && fresh.enabled) await this.attachAccount(fresh, wasOnline);
     this.log.info(`账户配置已保存 ${raw.id}`);
     return true;
   }
@@ -202,6 +187,40 @@ export class App {
     }
     await this.host.stopAll();
     this.log.info('已停止');
+  }
+
+  private async attachAccount(account: AccountConfig, autoStart = true): Promise<void> {
+    const id = account.id;
+    ensureAccountRuntime(id);
+    const adapter = createAdapter(
+      account,
+      () => readAccountState(id),
+      (patch) => writeAccountState(id, { ...readAccountState(id), ...patch }),
+    );
+    if (!adapter) {
+      this.log.error(`${id} 平台不支持: ${account.platform}`);
+      return;
+    }
+    this.accounts.set(id, account);
+    this.adapters.set(id, adapter);
+    await this.host.attach(account, adapter);
+    adapter.onMessage((evt) => {
+      this.messages++;
+      this.builtinCommand(adapter, evt);
+    });
+    if (autoStart) void adapter.start().catch((e: any) => this.log.error(`${id} 启动失败`, e?.message ?? e));
+  }
+
+  private async detachAccount(id: string): Promise<void> {
+    const adapter = this.adapters.get(id);
+    if (adapter) {
+      try {
+        await adapter.stop();
+      } catch {}
+      this.adapters.delete(id);
+    }
+    await this.host.detach(id);
+    this.accounts.delete(id);
   }
 
   private publicGlobal(): Omit<GlobalConfig, 'consolePassword'> {

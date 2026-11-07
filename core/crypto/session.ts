@@ -44,9 +44,13 @@ export class CryptoSession {
     return encryptEnvelope(Buffer.from(text, 'utf8'), this.encKey, this.macKey);
   }
 
-  decrypt(payload: string): string {
+  decryptBuffer(payload: string): Buffer {
     if (!this.encKey || !this.macKey) throw new AdapterError('会话未建立', 'no_session');
-    return decryptEnvelope(payload, this.encKey, this.macKey).toString('utf8');
+    return decryptEnvelope(payload, this.encKey, this.macKey);
+  }
+
+  decrypt(payload: string): string {
+    return this.decryptBuffer(payload).toString('utf8');
   }
 
   private async establish(): Promise<void> {

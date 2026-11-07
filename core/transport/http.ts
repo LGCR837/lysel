@@ -1,3 +1,4 @@
+import { gunzipSync } from 'node:zlib';
 import { AdapterError } from '../errors.ts';
 import { CryptoSession } from '../crypto/session.ts';
 
@@ -79,11 +80,19 @@ export class OCHttp {
 
     let payload: any = null;
     const raw = await res.text();
-    if (raw) {
+    let text = raw;
+    if (raw && encrypt && res.headers.get('X-Enc') === '1') {
+      const plain = this.session.decryptBuffer(raw);
+      text =
+        res.headers.get('X-Enc-Compression') === 'gzip'
+          ? gunzipSync(plain).toString('utf8')
+          : plain.toString('utf8');
+    }
+    if (text) {
       try {
-        payload = JSON.parse(raw);
+        payload = JSON.parse(text);
       } catch {
-        payload = raw;
+        payload = text;
       }
     }
 
