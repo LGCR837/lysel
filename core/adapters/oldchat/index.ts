@@ -93,16 +93,16 @@ export class OldChatAdapter extends BaseAdapter {
 
   async send(peer: Peer, seg: Segment[]): Promise<SendResult> {
     const enc = encodeSegments(seg);
-    if (enc.msgType === 'voice') {
-      if (enc.durationMs <= 0) throw new AdapterError('语音缺少时长 duration', 'missing_duration');
-      if (enc.durationMs > 60000) throw new AdapterError('语音超过 60 秒上限', 'duration_too_long');
+    if (enc.msgType === 'voice' && enc.durationMs > 60000) {
+      throw new AdapterError('语音超过 60 秒上限', 'duration_too_long');
     }
     const payload = {
       body: enc.body,
       msg_type: enc.msgType,
       media_url: enc.mediaUrl,
       thumb_url: enc.thumbUrl,
-      duration_ms: enc.durationMs,
+      // 服务端要求语音必须带 duration_ms，缺省按上限申报
+      duration_ms: enc.msgType === 'voice' ? enc.durationMs || 60000 : enc.durationMs,
     };
     const res =
       peer.scene === 'group'

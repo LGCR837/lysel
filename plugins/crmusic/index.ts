@@ -128,16 +128,27 @@ function formatDuration(ms: number): string {
 }
 
 /** OldChat 音乐卡片文本，按客户端 MusicShareInfo 的标签行格式排版 */
-function cardText(song: Song): string {
+function cardText(song: Song, withLyric: boolean): string {
   const lines = [`歌曲: ${song.name}`];
   if (song.artists.length) lines.push(`歌手: ${song.artists.join('/')}`);
   const duration = formatDuration(song.duration);
   if (duration) lines.push(`时长: ${duration}`);
   if (song.picUrl) lines.push(`封面: ${song.picUrl}`);
   lines.push(`歌曲ID: ${song.id}`);
-  lines.push(`歌词: ${CRMUSIC_API}?types=lyric&id=${song.id}&raw=1`);
+  if (withLyric) lines.push(`歌词: ${CRMUSIC_API}?types=lyric&id=${song.id}&raw=1`);
   lines.push('点击播放');
   return lines.join('\n');
+}
+
+/** 歌词接口有内容才写进卡片，避免客户端打开空歌词 */
+async function hasLyric(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${CRMUSIC_API}?types=lyric&id=${id}&raw=1`);
+    const text = (await res.text()).trim();
+    return text.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 async function sendCard(ctx: PluginContext, evt: MessageEvent, audioUrl: string, thumb: string, text: string): Promise<void> {
@@ -148,7 +159,7 @@ async function sendCard(ctx: PluginContext, evt: MessageEvent, audioUrl: string,
   }
   try {
     const native = ctx.native<{ gateway: (method: string, path: string, payload?: unknown) => Promise<unknown> }>();
-    const body = JSON.stringify({ v: 2, text, media_kind: 'music' });
+    const body = JSON.stringify({ v: 2, text, media_kind: 'music', audio_url: audioUrl, url: audioUrl });
     const extra = { body, msg_type: 'resource', media_url: audioUrl, thumb_url: thumb };
     const payload = evt.scene === 'group'
       ? { group_id: evt.peerId, ...extra }
@@ -204,12 +215,11 @@ export function onLoad(ctx: PluginContext) {
         await ctx.reply(evt, '拿不到播放地址');
         return;
       }
-      const text = cardText(song);
-      await ctx.reply(evt, text);
+      // 先语音再卡片，与原插件一致
+      await ctx.send(evt, [{ type: 'voice', url, duration: 60000 }]);
       if (ctx.account.platform === 'oldchat') {
+        const text = cardText(song, await hasLyric(song.id));
         await sendCard(ctx, evt, url, song.picUrl, text);
-      } else {
-        await ctx.send(evt, [{ type: 'voice', url }]);
       }
     } catch (e: any) {
       ctx.log.error(`播放失败 ${e?.message ?? e}`);
