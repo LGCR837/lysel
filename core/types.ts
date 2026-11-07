@@ -119,6 +119,7 @@ export interface PluginManifest {
 export interface GlobalConfig {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   commandPrefix: string;
+  prefixes: string[];
   consolePassword: string;
   webui: { enabled: boolean; host: string; port: number };
   plugins: Record<string, Record<string, unknown>>;
@@ -129,6 +130,7 @@ export interface AccountConfig {
   platform: 'oldchat' | 'onebot11' | string;
   label?: string;
   enabled: boolean;
+  prefixes?: string[];
   adapter: Record<string, any>;
   plugins?: Record<string, { enabled?: boolean; config?: Record<string, unknown> }>;
 }
@@ -137,10 +139,12 @@ export interface PluginContext {
   readonly name: string;
   readonly account: AccountRef;
   readonly config: Readonly<Record<string, any>>;
+  readonly prefixes: readonly string[];
   readonly storage: PluginStorage;
   send(peer: Peer | MessageEvent, seg: SegmentInput): Promise<SendResult>;
   reply(evt: MessageEvent, seg: SegmentInput): Promise<SendResult>;
   recall(evt: MessageEvent): Promise<void>;
+  getUser(userId: string): Promise<UserInfo | null>;
   onMessage(h: MessageHandler): void;
   command(name: string, h: (args: string[], evt: MessageEvent) => unknown): void;
   native<T = unknown>(): T;

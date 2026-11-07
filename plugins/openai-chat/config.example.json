@@ -9,7 +9,6 @@
   "maxReplyChars": 500,
   "triggerOnPrivate": true,
   "triggerOnAt": true,
-  "extraPrefixes": [],
   "vision": true,
   "replyOnError": false,
   "errorReply": "暂时无法回答",

@@ -1,0 +1,9 @@
+{
+  "name": "oyasumi",
+  "version": "1.0.0",
+  "description": "作息插件，支持记录睡眠时间",
+  "author": "Aoharu Reverie",
+  "enabled": true,
+  "main": "index.ts",
+  "sandbox": "guard"
+}

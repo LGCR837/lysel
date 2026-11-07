@@ -66,6 +66,13 @@ async function api(method, path, body) {
   return { ok: res.ok, status: res.status, data };
 }
 
+function parsePrefixes(value) {
+  return String(value ?? '')
+    .split(/[\s,，]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 function hint(id, text, ok = true) {
   const el = $(id);
   if (!el) return;
@@ -193,7 +200,7 @@ function renderPlugins(plugins, accounts) {
 }
 
 function renderSettings(cfg) {
-  const sig = JSON.stringify([cfg.logLevel, cfg.commandPrefix, cfg.webui]);
+  const sig = JSON.stringify([cfg.logLevel, cfg.commandPrefix, cfg.prefixes, cfg.webui]);
   if (sig === sigGlobal) return;
   sigGlobal = sig;
   const set = (id, value) => {
@@ -204,6 +211,7 @@ function renderSettings(cfg) {
   };
   set('cfg-logLevel', cfg.logLevel ?? 'info');
   set('cfg-commandPrefix', cfg.commandPrefix ?? '!');
+  set('cfg-prefixes', (cfg.prefixes ?? []).join(' '));
   set('cfg-webuiEnabled', String(cfg.webui?.enabled !== false));
   set('cfg-host', cfg.webui?.host ?? '127.0.0.1');
   set('cfg-port', cfg.webui?.port ?? 7520);
@@ -307,6 +315,7 @@ async function saveGlobalFromForm() {
   const patch = {
     logLevel: $('cfg-logLevel').value,
     commandPrefix: $('cfg-commandPrefix').value,
+    prefixes: parsePrefixes($('cfg-prefixes').value),
     webui: {
       enabled: $('cfg-webuiEnabled').value === 'true',
       host: $('cfg-host').value.trim(),
@@ -351,6 +360,7 @@ function renderAccountFields(raw) {
     { key: 'platform', label: '平台', type: 'select', value: platform, options: [['oldchat', 'OldChat'], ['onebot11', 'OneBot v11']] },
     { key: 'label', label: '备注', type: 'text', value: raw.label ?? '' },
     { key: 'enabled', label: '启用', type: 'boolean', value: raw.enabled !== false },
+    { key: 'prefixes', label: '前缀词', type: 'text', value: Array.isArray(raw.prefixes) ? raw.prefixes.join(' ') : '', hint: '留空沿用全局' },
   ];
   const adapter = PLATFORM_FIELDS[platform].map((f) => ({ ...f, value: raw.adapter?.[f.key] ?? f.def }));
   $('account-fields').innerHTML = [
@@ -366,6 +376,10 @@ function collectAccountFields() {
     let value = el.value;
     if (el.dataset.type === 'boolean') value = value === 'true';
     else if (el.dataset.type === 'number') value = Number(value);
+    if (key === 'prefixes') {
+      out.prefixes = parsePrefixes(value);
+      continue;
+    }
     if (el.dataset.adapter === '1') out.adapter[key] = value;
     else out[key] = value;
   }

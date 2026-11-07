@@ -83,12 +83,16 @@ export class AccountRuntime {
     const config = resolvePluginConfig(name, this.getGlobal(), this.account, readUserConfig(dir));
     const storage = new FileStorage(`${dir}/storage`);
     const log = createLogger(`plugin:${this.account.id}:${name}`);
+    const scopedPrefixes = Array.isArray(this.account.prefixes) && this.account.prefixes.length
+      ? this.account.prefixes
+      : this.getGlobal().prefixes ?? [];
 
     let context: PluginContext;
     context = createContext({
       name,
       account: this.ref,
       config,
+      prefixes: scopedPrefixes,
       storage,
       adapter: this.adapter,
       router: this.router,

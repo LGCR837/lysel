@@ -1,0 +1,8 @@
+{
+  "name": "crmusic",
+  "version": "1.0.0",
+  "description": "网易云点歌",
+  "author": "Aoharu Reverie",
+  "main": "index.ts",
+  "sandbox": "guard"
+}

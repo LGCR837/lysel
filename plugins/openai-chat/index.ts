@@ -24,7 +24,7 @@ export function onLoad(ctx: PluginContext) {
   const maxReplyChars = Math.max(50, count(ctx.config.maxReplyChars, 500));
   const triggerOnPrivate = ctx.config.triggerOnPrivate !== false;
   const triggerOnAt = ctx.config.triggerOnAt !== false;
-  const prefixes = Array.isArray(ctx.config.extraPrefixes) ? ctx.config.extraPrefixes.map(String).filter(Boolean) : [];
+  const prefixes = [...ctx.prefixes];
   const vision = ctx.config.vision !== false;
   const replyOnError = ctx.config.replyOnError === true;
   const errorReply = String(ctx.config.errorReply ?? '暂时无法回答');

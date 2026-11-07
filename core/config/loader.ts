@@ -6,6 +6,7 @@ import { PLUGINS_DIR, DATA_DIR, ACCOUNTS_DIR, GLOBAL_CONFIG_PATH, accountConfigP
 export const DEFAULT_GLOBAL: GlobalConfig = {
   logLevel: 'info',
   commandPrefix: '!',
+  prefixes: ['/', '!', '#'],
   consolePassword: '',
   webui: { enabled: true, host: '127.0.0.1', port: 7520 },
   plugins: {},
@@ -121,7 +122,7 @@ export function resolvePluginConfig(
   );
 }
 
-const EDITABLE_GLOBAL = ['logLevel', 'commandPrefix', 'webui', 'plugins'];
+const EDITABLE_GLOBAL = ['logLevel', 'commandPrefix', 'prefixes', 'webui', 'plugins'];
 
 export function updateAccount(id: string, patch: Partial<AccountConfig>): void {
   const current = loadAccount(id);

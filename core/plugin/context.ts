@@ -16,6 +16,7 @@ export interface ContextDeps {
   name: string;
   account: AccountRef;
   config: Record<string, any>;
+  prefixes: string[];
   storage: PluginStorage;
   adapter: Adapter;
   router: Router;
@@ -33,12 +34,13 @@ export function peerOf(evt: MessageEvent): Peer {
 }
 
 export function createContext(deps: ContextDeps): PluginContext {
-  const { name, account, config, storage, adapter, router, schedule, log } = deps;
+  const { name, account, config, prefixes, storage, adapter, router, schedule, log } = deps;
 
   const ctx: PluginContext = {
     name,
     account,
     config: Object.freeze(config),
+    prefixes: Object.freeze([...prefixes]),
     storage,
     log,
     send(target, seg) {
@@ -50,6 +52,9 @@ export function createContext(deps: ContextDeps): PluginContext {
     },
     async recall(evt) {
       await adapter.recall(peerOf(evt), evt.id);
+    },
+    getUser(userId) {
+      return adapter.getUser(userId);
     },
     onMessage(h: MessageHandler) {
       router.addMessage(name, h);

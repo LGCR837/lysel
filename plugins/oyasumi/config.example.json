@@ -1,0 +1,16 @@
+{
+  "goodMorningPatterns": ["^(早安|早上好|我醒了).*$"],
+  "goodNightPatterns": ["^(晚安|睡觉了|我要睡了).*$"],
+  "ignoreCase": true,
+  "maxTriggerChars": 7,
+  "duplicateNightPolicy": "update_open",
+  "orphanMorningPolicy": "warn_only",
+  "autoFillDefaultHours": 8,
+  "maxOpenSessionHours": 24,
+  "includeAutoFillInStats": true,
+  "appendCatgirlExtra": true,
+  "nightStaticReply": "晚安啦，{user_name}。已经帮你记下入睡时间 {sleep_time}，做个好梦喵~",
+  "morningStaticReply": "早安呀，{user_name}。你这次睡了 {duration_human}，今天也要元气满满哦，喵~",
+  "orphanMorningReply": "收到早安啦，但还没找到可闭合的晚安记录。可以用“/作息 修正”补录一下，喵~",
+  "duplicateNightReply": "你当前已经有进行中的睡眠记录了，这次按策略处理好啦，喵~"
+}
