@@ -65,6 +65,10 @@ async function api(method, path, body) {
   });
   let data = null;
   try { data = await res.json(); } catch {}
+  if (res.status === 403) {
+    sessionStorage.removeItem('lysel-key');
+    if ($('gate')) showGate();
+  }
   return { ok: res.ok, status: res.status, data };
 }
 
@@ -206,8 +210,7 @@ function renderSettings(cfg) {
   set('cfg-webuiEnabled', String(cfg.webui?.enabled !== false));
   set('cfg-host', cfg.webui?.host ?? '127.0.0.1');
   set('cfg-port', cfg.webui?.port ?? 7520);
-  if (consoleKey()) set('cfg-key', consoleKey());
-  $('settings-note').textContent = `Lysel ${statusData?.version ?? ''} · 控制台密钥仅在配置文件中设置，网页不提供修改。端口与监听地址改动需重启生效。`;
+  $('settings-note').textContent = `Lysel ${statusData?.version ?? ''} · 控制台密钥在 data/bot.json 中设置，不在此页修改。端口与监听地址改动需重启生效。`;
 }
 
 function renderStatus(data) {
@@ -552,15 +555,43 @@ document.addEventListener('click', async (ev) => {
   }
 });
 
-$('cfg-key').addEventListener('change', async (ev) => {
-  sessionStorage.setItem('lysel-key', ev.target.value.trim());
-  await loadConfig();
+function showGate() {
+  $('gate').hidden = false;
+  $('gate-key').focus();
+}
+
+async function submitGate() {
+  const key = $('gate-key').value.trim();
+  if (!key) {
+    hint('gate-hint', '请输入密钥', false);
+    return;
+  }
+  sessionStorage.setItem('lysel-key', key);
+  const res = await api('GET', '/api/config');
+  if (!res.ok) {
+    sessionStorage.removeItem('lysel-key');
+    hint('gate-hint', '密钥不正确', false);
+    return;
+  }
+  configData = res.data;
+  $('gate').hidden = true;
+  await loadStatus(null, true);
+}
+
+$('gate-submit').addEventListener('click', submitGate);
+$('gate-key').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter') submitGate();
 });
 
 window.addEventListener('hashchange', () => setView(location.hash.replace('#', '')));
 
-setView(location.hash.replace('#', '') || 'dashboard');
-loadStatus();
+async function boot() {
+  setView(location.hash.replace('#', '') || 'dashboard');
+  await loadStatus();
+  if (statusData?.authRequired && !sessionStorage.getItem('lysel-key')) showGate();
+}
+
+void boot();
 setInterval(() => {
   if (statusData) $('uptime-value').textContent = fmtUptime(statusData.uptime + (Date.now() - statusData.at));
 }, 1000);

@@ -85,6 +85,7 @@ export class App {
         heapUsed: Math.round(mem.heapUsed / 1048576),
       },
       config: this.publicGlobal(),
+      authRequired: Boolean(this.global.consolePassword),
       stats: { messages: this.messages, errors: totalErrors() },
       accounts: [...this.accounts.values()].map((a) => {
         const adapter = this.adapters.get(a.id);
