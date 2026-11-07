@@ -2,7 +2,7 @@
 import type { MessageEvent, PluginContext } from '../../core/types.ts';
 import { readBody, wakeWordsOf } from '../_shared/trigger.ts';
 import { parseFavorLevels, calculateNumer, matchStudent, renderFavorImg } from './favor.ts';
-import { setWarnHook } from './data.ts';
+import { setWarnHook, setDebugHook } from './data.ts';
 import {
   ensureGachaData,
   gacha10,
@@ -34,6 +34,7 @@ export function onLoad(ctx: PluginContext) {
   const wakeWords = wakeWordsOf(ctx.config);
   const requireWake = ctx.config.requireWakeInGroup === true;
   setWarnHook((msg) => ctx.log.warn(msg));
+  setDebugHook((msg) => ctx.log.debug(msg));
 
   void ensureGachaData().catch((e: any) => ctx.log.error(`初始化抽卡数据失败 ${e?.message ?? e}`));
 
@@ -104,14 +105,18 @@ export function onLoad(ctx: PluginContext) {
       upId = check.id;
     }
 
+    ctx.log.debug(`抽卡 serid=${serid} 一井=${isWell} up=${upName || '无'}`);
     const result = isWell ? gacha200(serid, upId) : gacha10(serid, upId);
+    ctx.log.debug(`抽卡结果 ${JSON.stringify(result[1])}`);
     const muzhu = result[1].reduce((sum: number, s) => {
       if (s === 1) return sum + 1;
       if (s === 2) return sum + 10;
       if (s === 3 || s === 4 || s === 'pick') return sum + 50;
       return sum;
     }, 0);
+    const started = Date.now();
     const buf = isWell ? await renderGacha200Img(result, serid) : await renderGacha10Img(result, serid, muzhu);
+    ctx.log.debug(`抽卡图渲染完成 ${buf.length}B ${Date.now() - started}ms`);
     await sendImage(evt, buf, 'ba-gacha.png');
   };
 
@@ -119,10 +124,14 @@ export function onLoad(ctx: PluginContext) {
     const body = readBody(ctx, evt, { wakeWords, requireWakeInGroup: requireWake });
     if (body === null) return;
     const m = body.match(/^ba[\s:：,，]+(.+)$/i) ?? body.match(/^ba$/i);
-    if (!m) return;
+    if (!m) {
+      ctx.log.debug(`未命中 正文="${body.slice(0, 60)}"`);
+      return;
+    }
 
     try {
       const cmd = (m[1] ?? '').trim();
+      ctx.log.debug(`命中 BA 子命令="${cmd || '(空)'}"`);
       if (!cmd || /^(帮助|help|菜单|menu)$/i.test(cmd)) {
         await ctx.reply(evt, HELP_TEXT);
         return;

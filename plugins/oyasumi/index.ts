@@ -512,10 +512,17 @@ export function onLoad(ctx: PluginContext) {
     if (!raw) return;
     const prefix = ctx.prefixes.find((p) => p && raw.startsWith(p));
     const text = (prefix ? raw.slice(prefix.length) : raw).trim();
-    if (!text || text.length > maxTriggerChars) return;
+    if (!text || text.length > maxTriggerChars) {
+      if (text) ctx.log.debug(`触发跳过 长度=${text.length} 上限=${maxTriggerChars} 文本="${text.slice(0, 30)}"`);
+      return;
+    }
 
     const matchResult = trigger.match(text);
-    if (!matchResult) return;
+    if (!matchResult) {
+      ctx.log.debug(`未匹配作息关键词 "${text}"`);
+      return;
+    }
+    ctx.log.debug(`命中 ${matchResult.event_type} 关键词=${matchResult.matched_pattern}`);
 
     const userId = msg.sender.id;
     const userName = await resolveUserName(ctx, msg);

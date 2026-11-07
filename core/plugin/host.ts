@@ -22,6 +22,30 @@ interface Mounted {
   context: PluginContext;
 }
 
+/** 日志里截断长文本，避免刷屏 */
+function clip(text: string | undefined, max = 120): string {
+  const s = String(text ?? '').replace(/\s+/g, ' ');
+  return s.length > max ? `${s.slice(0, max)}…(${s.length})` : s;
+}
+
+/** 配置里的密钥类字段打码，超长字符串截断 */
+function redact(value: unknown, depth = 0): unknown {
+  if (value === null || typeof value !== 'object') {
+    if (typeof value === 'string' && value.length > 160) return `${value.slice(0, 160)}…(${value.length})`;
+    return value;
+  }
+  if (depth > 3) return '…';
+  if (Array.isArray(value)) {
+    const head = value.slice(0, 8).map((v) => redact(v, depth + 1));
+    return value.length > 8 ? [...head, `…共 ${value.length} 项`] : head;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    out[k] = /key|token|secret|password|passwd/i.test(k) && typeof v === 'string' ? '***' : redact(v, depth + 1);
+  }
+  return out;
+}
+
 export class AccountRuntime {
   readonly router = new Router();
   readonly dispatcher: Dispatcher;
@@ -107,6 +131,7 @@ export class AccountRuntime {
     const module = preloaded ?? (await importPlugin(name, manifest));
     await module.onLoad?.(context);
     this.mounted.set(name, { manifest, module, context });
+    log.debug(`生效配置 ${JSON.stringify(redact(config))}`);
     log.info(`已加载 v${manifest.version}`);
   }
 
@@ -190,8 +215,15 @@ export class PluginHost {
   async attach(account: AccountConfig, adapter: Adapter): Promise<AccountRuntime> {
     const runtime = new AccountRuntime(account, adapter, this.getGlobal);
     this.runtimes.set(account.id, runtime);
+    const log = createLogger(`plugin:${account.id}`);
     adapter.onMessage((evt) => {
-      if (this.shouldHandle(evt)) runtime.dispatch(evt);
+      const accept = this.shouldHandle(evt);
+      log.debug(
+        `收到 ${evt.scene} ${evt.peerId} ${evt.sender.name || evt.sender.id}(${evt.sender.id}) ` +
+          `类型=${evt.segments.map((s) => s.type).join(',') || 'text'} 内容=${clip(evt.text)}` +
+          (accept ? '' : ' → 内置命令，不派发插件'),
+      );
+      if (accept) runtime.dispatch(evt);
     });
     await runtime.mountAll(this.manifests);
     return runtime;

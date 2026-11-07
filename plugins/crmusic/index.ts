@@ -13,6 +13,10 @@ const MODULUS = BigInt(
 );
 
 const BASE = 'https://music.163.com';
+
+/** 插件外部的工具函数拿不到 ctx，用钩子把日志接回插件作用域 */
+let dbg: (msg: string) => void = () => {};
+let warn: (msg: string) => void = () => {};
 const CRMUSIC_API = 'https://ii.reverie.dpdns.org/crmusic/api.php';
 
 interface Song {
@@ -79,11 +83,13 @@ function neteaseHeaders(): Record<string, string> {
 }
 
 async function weapi(url: string, params: unknown): Promise<any> {
+  const started = Date.now();
   const payload = weapiEncrypt(params);
   const form = new URLSearchParams({ params: payload.params, encSecKey: payload.encSecKey });
   const res = await fetch(url, { method: 'POST', headers: neteaseHeaders(), body: form.toString() });
   const buffer = Buffer.from(await res.arrayBuffer());
   const data = JSON.parse(await decompress(buffer, res.headers.get('content-encoding')));
+  dbg(`网易云 ${url.replace(BASE, '')} ${res.status} ${Date.now() - started}ms 返回 ${JSON.stringify(data).slice(0, 200)}`);
   if (data?.code && data.code !== 200) throw new Error(`网易云错误 code=${data.code}`);
   return data;
 }
@@ -111,12 +117,16 @@ async function resolveUrl(id: string, br = 320): Promise<string> {
   const item = data?.data?.[0] ?? {};
   if (item.uf?.url) item.url = item.uf.url;
   const isVip = Number(item.fee || 0) === 1 && Number(item.payed || 0) === 0;
+  dbg(`解析播放地址 id=${id} fee=${item.fee ?? '-'} payed=${item.payed ?? '-'} 直链=${item.url ? '有' : '无'}`);
   if (!item.url || isVip || item.freeTrialInfo) {
     try {
       const res = await fetch(`https://music-api.gdstudio.xyz/api.php?types=url&source=netease&id=${id}&br=${br}`);
       const json: any = await res.json();
+      dbg(`gdstudio 回退 ${res.status} 直链=${json?.url ? '有' : '无'}`);
       if (json?.url) return String(json.url).replace(/^http:\/\//i, 'https://');
-    } catch {}
+    } catch (e: any) {
+      warn(`gdstudio 回退失败 ${e?.message ?? e}`);
+    }
   }
   return String(item.url ?? '').replace(/^http:\/\//i, 'https://');
 }
@@ -171,6 +181,8 @@ async function sendCard(ctx: PluginContext, evt: MessageEvent, audioUrl: string,
 }
 
 export function onLoad(ctx: PluginContext) {
+  dbg = (msg: string) => ctx.log.debug(msg);
+  warn = (msg: string) => ctx.log.warn(msg);
   const pages = Math.min(50, Math.max(1, Number(ctx.config.pages) || 20));
   const maxList = Math.min(50, Math.max(1, Number(ctx.config.maxList) || 10));
   const errorText = String(ctx.config.errorText ?? '猫猫晕乎乎的，溜号了喵~');
@@ -184,6 +196,7 @@ export function onLoad(ctx: PluginContext) {
     }
     try {
       const songs = await search(keyword, pages);
+      ctx.log.debug(`搜索完成 关键词="${keyword}" 结果=${songs.length}`);
       if (!songs.length) {
         await ctx.reply(evt, `喵呜…没找到和【${keyword}】有关的歌`);
         return;
@@ -209,8 +222,10 @@ export function onLoad(ctx: PluginContext) {
       return;
     }
     const song = list[index - 1];
+    ctx.log.debug(`播放 第 ${index} 首 ${song.name} - ${song.artists.join('/')} id=${song.id}`);
     try {
       const url = await resolveUrl(song.id);
+      ctx.log.debug(`播放地址长度=${url.length} 前缀=${url.slice(0, 48)}`);
       if (!url) {
         await ctx.reply(evt, '这首歌的播放地址拿不到喵…换一首试试？');
         return;
@@ -236,15 +251,19 @@ export function onLoad(ctx: PluginContext) {
 
     const searchMatch = body.match(/^点歌[\s：:]*(.*)$/);
     if (searchMatch) {
+      ctx.log.debug(`命中 点歌 关键词="${searchMatch[1].trim()}"`);
       void doSearch(evt, searchMatch[1].trim());
       return;
     }
     const playMatch = body.match(/^播放[\s：:]*(\d+)?$/);
     if (playMatch) {
       const index = playMatch[1];
+      ctx.log.debug(`命中 播放 序号=${index ?? '缺失'}`);
       if (index === undefined) void ctx.reply(evt, '要说播放几号喵~ 例如: 播放 1');
       else void doPlay(evt, Number(index));
+      return;
     }
+    ctx.log.debug(`未命中 前缀=${hit || '-'} 正文="${body.slice(0, 60)}"`);
   });
 
   ctx.log.info(`已就绪 前缀可选 ${ctx.prefixes.join(' ') || '未配置'}`);

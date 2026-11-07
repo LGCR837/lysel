@@ -39,7 +39,8 @@ export function onLoad(ctx: PluginContext) {
   const startTyping = (evt: MessageEvent): (() => void) => {
     if (!typingEnabled) return () => {};
     let alive = true;
-    void ctx.typing(evt, true).catch(() => {});
+    ctx.log.debug(`输入状态 开 ${evt.scene} ${evt.peerId}`);
+    void ctx.typing(evt, true).catch((e: any) => ctx.log.debug(`输入状态发送失败 ${e?.message ?? e}`));
     const timer = setInterval(() => {
       if (alive) void ctx.typing(evt, true).catch(() => {});
     }, typingRefreshMs);
@@ -48,6 +49,7 @@ export function onLoad(ctx: PluginContext) {
       if (!alive) return;
       alive = false;
       clearInterval(timer);
+      ctx.log.debug(`输入状态 关 ${evt.scene} ${evt.peerId}`);
       void ctx.typing(evt, false).catch(() => {});
     };
   };
@@ -79,11 +81,27 @@ export function onLoad(ctx: PluginContext) {
 
   const pickPrompt = (evt: MessageEvent): string | null => {
     const text = String(evt.text ?? '').trim();
-    const hit = prefixes.find((p) => text.startsWith(p));
-    if (hit) return text.slice(hit.length).trim();
-    if (evt.scene === 'private') return triggerOnPrivate ? text : null;
+    const hit = prefixes.find((p) => p && text.startsWith(p));
+    if (hit) {
+      ctx.log.debug(`触发 前缀=${hit}`);
+      return text.slice(hit.length).trim();
+    }
+    if (evt.scene === 'private') {
+      if (!triggerOnPrivate) {
+        ctx.log.debug('跳过 私聊触发已关闭');
+        return null;
+      }
+      return text;
+    }
     const atSelf = evt.segments.some((s) => s.type === 'at' && s.id === evt.selfId);
-    return triggerOnAt && atSelf ? text : null;
+    if (atSelf) {
+      ctx.log.debug('触发 群内 @ 自己');
+      return text;
+    }
+    ctx.log.debug(
+      `跳过 群内未@ ${triggerOnAt ? '' : '(提及触发已关闭)'} 文本="${text.slice(0, 40)}" 自己=${evt.selfId}`,
+    );
+    return null;
   };
 
   const collectImages = (evt: MessageEvent): string[] =>
@@ -95,6 +113,7 @@ export function onLoad(ctx: PluginContext) {
 
   const ask = async (messages: Array<{ role: Role; content: string | Part[] }>): Promise<string> => {
     const controller = new AbortController();
+    const started = Date.now();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -103,7 +122,12 @@ export function onLoad(ctx: PluginContext) {
         body: JSON.stringify({ model, messages, temperature }),
         signal: controller.signal,
       });
-      if (!res.ok) throw new Error(`接口返回 ${res.status}`);
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        ctx.log.warn(`模型接口 ${res.status} ${Date.now() - started}ms ${detail.slice(0, 300)}`);
+        throw new Error(`接口返回 ${res.status}`);
+      }
+      ctx.log.debug(`模型接口 ${res.status} ${Date.now() - started}ms`);
       const data: any = await res.json();
       const raw = data?.choices?.[0]?.message?.content;
       const text = Array.isArray(raw) ? raw.map((p: any) => p?.text ?? '').join('') : String(raw ?? '');
@@ -132,11 +156,13 @@ export function onLoad(ctx: PluginContext) {
       messages.push({ role: 'user', content: userText });
     }
 
+    const started = Date.now();
+    ctx.log.debug(`请求模型 model=${model} 消息数=${messages.length} 图片=${images.length} 输入长度=${userText.length}`);
     let reply: string;
     try {
       reply = await ask(messages);
     } catch (e: any) {
-      ctx.log.error(`请求失败 ${e?.message ?? e}`);
+      ctx.log.error(`请求失败 ${Date.now() - started}ms ${e?.message ?? e}`);
       if (replyOnError) await ctx.reply(evt, errorReply);
       return;
     }
@@ -147,6 +173,7 @@ export function onLoad(ctx: PluginContext) {
       { role: 'assistant', content: trimmed },
     ];
     saveHistory(key, [...loadHistory(key), ...appended].slice(-maxHistory));
+    ctx.log.debug(`回复完成 ${Date.now() - started}ms 原文=${reply.length} 截断后=${trimmed.length}`);
     await ctx.reply(evt, trimmed);
   };
 
@@ -168,6 +195,7 @@ export function onLoad(ctx: PluginContext) {
     const now = Date.now();
     const recent = (hits.get(evt.sender.id) ?? []).filter((t) => now - t < 60000);
     if (recent.length >= rateLimitPerMin) {
+      ctx.log.debug(`限流 忽略 ${evt.sender.id} 一分钟内 ${recent.length} 条 上限 ${rateLimitPerMin}`);
       if (rateLimitReply) void ctx.reply(evt, rateLimitReply);
       return;
     }

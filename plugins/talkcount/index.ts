@@ -97,12 +97,17 @@ export function onLoad(ctx: PluginContext) {
     if (evt.scene !== 'group') return;
     const name = evt.sender.name && evt.sender.name !== evt.sender.id ? evt.sender.name : '';
     data.record(evt.peerId, evt.sender.id, name, todayStrUTC8());
+    ctx.log.debug(`计数 ${evt.peerId} ${name || evt.sender.id} → ${data.total(todayStrUTC8(), evt.peerId)} 条`);
   });
 
   ctx.onMessage((evt) => {
     const body = readBody(ctx, evt, { wakeWords });
     if (body === null) return;
-    if (!aliases.some((a) => a.toLowerCase() === body.toLowerCase())) return;
+    if (!aliases.some((a) => a.toLowerCase() === body.toLowerCase())) {
+      ctx.log.debug(`未命中 正文="${body.slice(0, 60)}" 别名=${aliases.join('/')}`);
+      return;
+    }
+    ctx.log.debug(`命中 排行榜命令 群=${evt.peerId}`);
     void handleCommand(evt).catch((e: any) => ctx.log.error(`排行榜命令异常 ${e?.message ?? e}`));
   });
 

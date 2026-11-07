@@ -90,6 +90,9 @@ export function onLoad(ctx: PluginContext) {
     }
     const withAvatar = pool.filter((m) => !!m.avatar);
     const finalPool = withAvatar.length ? withAvatar : pool;
+    ctx.log.debug(
+      `[draw] ${evt.peerId} 成员=${members.length} 候选=${candidates.length} 近7天活跃=${active.size} 有头像=${withAvatar.length} 实际池=${finalPool.length}`,
+    );
     const target = finalPool[Math.floor(Math.random() * finalPool.length)];
     const name = target.name || target.id;
 
@@ -311,9 +314,19 @@ export function onLoad(ctx: PluginContext) {
   };
 
   const sendGraph = async (groupId: string): Promise<void> => {
-    const png = await renderGroupGraph(groupId);
-    const url = await ctx.upload(png, 'image/png', 'wifepicker.png');
-    await ctx.send({ scene: 'group', id: groupId }, [{ type: 'image', url }]);
+    let stage = '渲染';
+    const started = Date.now();
+    try {
+      const png = await renderGroupGraph(groupId);
+      stage = '上传';
+      ctx.log.debug(`[graph] ${groupId} 渲染完成 ${png.length}B ${Date.now() - started}ms`);
+      const url = await ctx.upload(png, 'image/png', 'wifepicker.png');
+      stage = '发送';
+      await ctx.send({ scene: 'group', id: groupId }, [{ type: 'image', url }]);
+      ctx.log.debug(`[graph] ${groupId} 全部完成 ${Date.now() - started}ms`);
+    } catch (e: any) {
+      throw new Error(`${stage}失败 ${e?.message ?? e}`);
+    }
   };
 
   const handleGraph = async (evt: MessageEvent): Promise<void> => {
@@ -363,7 +376,9 @@ export function onLoad(ctx: PluginContext) {
         continue;
       }
       try {
+        const started = Date.now();
         await sendGraph(groupId);
+        ctx.log.debug(`[autoGraph] ${groupId} 渲染发送完成 ${Date.now() - started}ms`);
         data.markGraphReported(groupId, date);
         sent++;
         ctx.log.info(`[autoGraph] 已发送 ${groupId} 关系图 (${draws} 条记录)`);
@@ -387,6 +402,7 @@ export function onLoad(ctx: PluginContext) {
 
     if (await handleProposeReply(evt, body)) return;
 
+    ctx.log.debug(`命令解析 群=${evt.peerId} 正文="${body.slice(0, 60)}"`);
     if (/^(今日老婆|抽老婆)$/.test(body)) {
       await handleDraw(evt);
       return;
@@ -413,6 +429,7 @@ export function onLoad(ctx: PluginContext) {
       await handleGraph(evt);
       return;
     }
+    ctx.log.debug(`未命中 正文="${body.slice(0, 60)}"`);
   });
 
   // 定时检查：命中 autoGraphTime 且当天没跑过就推

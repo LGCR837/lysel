@@ -10,14 +10,32 @@ export const STU_ICON_BASE = `${COS}/stu_icon_db_png`;
 
 const SHARED_ASSETS = fileURLToPath(new URL('../_shared/assets/', import.meta.url));
 
+let warnHook: ((msg: string) => void) | null = null;
+let debugHook: ((msg: string) => void) | null = null;
+
+/** 由插件入口注册日志，缺图时能定位到具体 URL */
+export function setWarnHook(fn: (msg: string) => void): void {
+  warnHook = fn;
+}
+
+export function setDebugHook(fn: (msg: string) => void): void {
+  debugHook = fn;
+}
+
+
 const TTL = 60 * 60 * 1000;
 const cache = new Map<string, { data: any; ts: number }>();
 
 async function fetchJSON(name: string): Promise<any> {
   const key = `json:${name}`;
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.ts < TTL) return hit.data;
+  if (hit && Date.now() - hit.ts < TTL) {
+    debugHook?.(`数据命中缓存 ${name}`);
+    return hit.data;
+  }
+  const started = Date.now();
   const res = await fetch(`${JSON_BASE}/${name}`);
+  debugHook?.(`拉取 ${name} ${res.status} ${Date.now() - started}ms`);
   if (!res.ok) throw new Error(`拉取 ${name} 失败 ${res.status}`);
   const data = await res.json();
   cache.set(key, { data, ts: Date.now() });
@@ -61,13 +79,6 @@ export function ensureFont(): string {
 }
 
 // ---------- 图片加载 ----------
-let warnHook: ((msg: string) => void) | null = null;
-
-/** 由插件入口注册日志，缺图时能定位到具体 URL */
-export function setWarnHook(fn: (msg: string) => void): void {
-  warnHook = fn;
-}
-
 const imgCache = new Map<string, any>();
 
 /** COS 可直连，成功即缓存 */
@@ -97,6 +108,6 @@ export async function downloadImageBuffer(url: string): Promise<Buffer> {
       Referer: 'https://ba.gamekee.com/',
     },
   });
-  if (!res.ok) throw new Error(`下载图片失败 ${res.status}`);
+  if (!res.ok) throw new Error(`下载图片失败 ${res.status} ${url}`);
   return Buffer.from(await res.arrayBuffer());
 }

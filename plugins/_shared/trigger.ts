@@ -13,9 +13,15 @@ export const DEFAULT_WAKE_WORDS = ['Lysel'];
 
 /** 去掉前缀、唤醒词、@ 片段后的正文；返回 null 表示不该处理 */
 export function readBody(ctx: PluginContext, evt: MessageEvent, cfg: TriggerConfig = {}): string | null {
-  if (evt.sender.id === evt.selfId) return null;
+  if (evt.sender.id === evt.selfId) {
+    ctx.log.debug('触发判定 跳过 自己发的消息');
+    return null;
+  }
   let body = String(evt.text ?? '').trim();
-  if (!body) return null;
+  if (!body) {
+    ctx.log.debug(`触发判定 跳过 无正文 类型=${evt.segments.map((s) => s.type).join(',') || 'empty'}`);
+    return null;
+  }
 
   const wakeWords = (cfg.wakeWords ?? DEFAULT_WAKE_WORDS).map((w) => String(w ?? '').trim()).filter(Boolean);
 
@@ -27,9 +33,15 @@ export function readBody(ctx: PluginContext, evt: MessageEvent, cfg: TriggerConf
 
   if (cfg.requireWakeInGroup && evt.scene === 'group') {
     const atSelf = evt.segments.some((s) => s.type === 'at' && s.id === evt.selfId);
-    if (!prefix && !wake && !atSelf) return null;
+    if (!prefix && !wake && !atSelf) {
+      ctx.log.debug(`触发判定 跳过 群内未唤醒 原文="${String(evt.text ?? '').slice(0, 60)}"`);
+      return null;
+    }
   }
 
+  ctx.log.debug(
+    `触发判定 通过 prefix=${prefix || '-'} wake=${wake || '-'} 正文="${body.slice(0, 80)}"`,
+  );
   return body;
 }
 

@@ -43,6 +43,7 @@ export class OldChatAdapter extends BaseAdapter {
       () => this.token,
       () => this.account.adapter?.encrypt !== false,
       () => this.renew(),
+      this.log,
     );
   }
 
@@ -104,6 +105,11 @@ export class OldChatAdapter extends BaseAdapter {
       // 服务端要求语音必须带 duration_ms，缺省按上限申报
       duration_ms: enc.msgType === 'voice' ? enc.durationMs || 60000 : enc.durationMs,
     };
+    this.log.debug(
+      `发送 ${peer.scene} ${peer.id} type=${enc.msgType} body=${enc.body.slice(0, 120)}` +
+        (enc.mediaUrl ? ` media=${enc.mediaUrl}` : '') +
+        (enc.durationMs ? ` duration=${enc.durationMs}` : ''),
+    );
     const res =
       peer.scene === 'group'
         ? await this.http.gateway<any>('POST', '/v2/groups/message/send', { group_id: peer.id, ...payload })
@@ -130,7 +136,10 @@ export class OldChatAdapter extends BaseAdapter {
   async typing(peer: Peer, isTyping: boolean): Promise<void> {
     // 服务端只认大写 UID / GRP-xxx，nc_ 开头的本地 id 无法上报
     const id = String(peer.id ?? '').toUpperCase();
-    if (!/^[A-Z0-9-]{4,32}$/.test(id)) return;
+    if (!/^[A-Z0-9-]{4,32}$/.test(id)) {
+      this.log.debug(`输入状态跳过 无效 id=${peer.id}`);
+      return;
+    }
     const path = peer.scene === 'group' ? '/v2/groups/typing' : '/v2/chats/typing';
     await this.http
       .gateway('POST', path, { chat_id: id, is_typing: isTyping, is_group: peer.scene === 'group' })
@@ -139,6 +148,8 @@ export class OldChatAdapter extends BaseAdapter {
 
   /** 上传媒体，返回服务端相对地址（/v1/uploads/...） */
   async upload(data: Uint8Array, mime: string, name = 'image.png'): Promise<string> {
+    const started = Date.now();
+    this.log.debug(`上传开始 ${name} ${mime} ${data.length}B`);
     const form = new FormData();
     form.append('file', new Blob([data], { type: mime }), name);
     const res = await fetch(new URL('/v1/media', this.origin), {
@@ -154,10 +165,12 @@ export class OldChatAdapter extends BaseAdapter {
       json = null;
     }
     if (!res.ok) {
-      throw new AdapterError(json?.message ?? `上传失败 ${res.status}`, String(json?.error ?? res.status), res.status);
+      this.log.warn(`上传失败 ${res.status} ${Date.now() - started}ms ${text.slice(0, 300)}`);
+      throw new AdapterError(json?.error ?? json?.message ?? `上传失败 ${res.status}`, String(json?.code ?? res.status), res.status);
     }
     const url = json?.url ?? json?.media_url ?? json?.data?.url;
-    if (!url) throw new AdapterError('上传未返回地址', 'upload_no_url');
+    if (!url) throw new AdapterError(`上传未返回地址 ${text.slice(0, 200)}`, 'upload_no_url');
+    this.log.debug(`上传完成 ${url} ${Date.now() - started}ms`);
     return String(url);
   }
 
