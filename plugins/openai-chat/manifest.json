@@ -1,0 +1,8 @@
+{
+  "name": "openai-chat",
+  "version": "1.0.0",
+  "description": "OpenAI 兼容接口对话",
+  "author": "Aoharu Reverie",
+  "main": "index.ts",
+  "sandbox": "guard"
+}

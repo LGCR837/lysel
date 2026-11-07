@@ -1,8 +1,0 @@
-{
-  "name": "echo",
-  "version": "0.1.0",
-  "description": "最小示例插件，提供 ping 与 echo 命令",
-  "author": "Lysel",
-  "main": "index.ts",
-  "sandbox": "guard"
-}

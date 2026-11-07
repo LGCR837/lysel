@@ -1,0 +1,20 @@
+{
+  "apiKey": "",
+  "baseUrl": "https://api.openai.com",
+  "model": "gpt-4o-mini",
+  "systemPrompt": "你是 Lysel 的聊天助手。回答简洁，使用纯文本，不要使用 Markdown。",
+  "maxHistory": 10,
+  "timeoutMs": 60000,
+  "temperature": 0.8,
+  "maxReplyChars": 500,
+  "triggerOnPrivate": true,
+  "triggerOnAt": true,
+  "extraPrefixes": [],
+  "vision": true,
+  "replyOnError": false,
+  "errorReply": "暂时无法回答",
+  "bannedWords": [],
+  "rateLimitPerMin": 6,
+  "rateLimitReply": "",
+  "persistHistory": false
+}
