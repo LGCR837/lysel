@@ -424,6 +424,9 @@ ul { margin: 0; padding: 0; list-style: none; }
   .plugin-form { grid-template-columns: 1fr; }
   .plugin-form .field { border-right: 0; }
 }
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { width: 0; height: 0; display: none; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
   .reveal { opacity: 1; transform: none; }
