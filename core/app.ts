@@ -20,6 +20,7 @@ import { PluginHost } from './plugin/host.ts';
 import { createAdapter, knownPlatforms } from './adapters/registry.ts';
 import { startWebUi } from './webui/server.ts';
 import { VERSION } from './version.ts';
+import { isBuiltinCommand } from './builtin.ts';
 import type { AccountConfig, Adapter, GlobalConfig, MessageEvent, PluginManifest } from './types.ts';
 
 export class App {
@@ -39,7 +40,11 @@ export class App {
     if (created) this.log.info('已生成 data/bot.json');
 
     this.manifests = listPlugins();
-    this.host = new PluginHost(() => this.global, this.manifests);
+    this.host = new PluginHost(
+      () => this.global,
+      this.manifests,
+      (evt) => !isBuiltinCommand(evt.text),
+    );
 
     const ids = listAccountIds();
     if (ids.length === 0) {
@@ -231,7 +236,7 @@ export class App {
   }
 
   private builtinCommand(adapter: Adapter, evt: MessageEvent): void {
-    if (evt.text !== '#lysel' && evt.text !== '#Lysel') return;
+    if (!isBuiltinCommand(evt.text)) return;
     const reply = `Lysel ${VERSION}\nRunning ${this.formatUptime()}\n${this.manifests.length} Plugins`;
     void adapter.send({ scene: evt.scene, id: evt.peerId }, [{ type: 'text', text: reply }]).catch((e: any) =>
       this.log.error('内置命令回复失败', e?.message ?? e),

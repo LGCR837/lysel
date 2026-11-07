@@ -172,12 +172,15 @@ export class PluginHost {
   constructor(
     private readonly getGlobal: () => GlobalConfig,
     private readonly manifests: PluginManifest[],
+    private readonly shouldHandle: (evt: MessageEvent) => boolean = () => true,
   ) {}
 
   async attach(account: AccountConfig, adapter: Adapter): Promise<AccountRuntime> {
     const runtime = new AccountRuntime(account, adapter, this.getGlobal);
     this.runtimes.set(account.id, runtime);
-    adapter.onMessage((evt) => runtime.dispatch(evt));
+    adapter.onMessage((evt) => {
+      if (this.shouldHandle(evt)) runtime.dispatch(evt);
+    });
     await runtime.mountAll(this.manifests);
     return runtime;
   }
