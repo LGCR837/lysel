@@ -511,8 +511,7 @@ export function onLoad(ctx: PluginContext) {
     const raw = String(msg.text ?? '').trim();
     if (!raw) return;
     const prefix = ctx.prefixes.find((p) => p && raw.startsWith(p));
-    if (!prefix) return;
-    const text = raw.slice(prefix.length).trim();
+    const text = (prefix ? raw.slice(prefix.length) : raw).trim();
     if (!text || text.length > maxTriggerChars) return;
 
     const matchResult = trigger.match(text);

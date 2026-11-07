@@ -198,8 +198,7 @@ export function onLoad(ctx: PluginContext) {
     const raw = String(evt.text ?? '').trim();
     if (!raw) return;
     const hit = ctx.prefixes.find((p) => p && raw.startsWith(p));
-    if (!hit) return;
-    const body = raw.slice(hit.length).trim();
+    const body = (hit ? raw.slice(hit.length) : raw).trim();
 
     const searchMatch = body.match(/^点歌[\s：:]*(.+)$/);
     if (searchMatch) {
@@ -210,7 +209,7 @@ export function onLoad(ctx: PluginContext) {
     if (playMatch) void doPlay(evt, Number(playMatch[1]));
   });
 
-  ctx.log.info(`已就绪 前缀 ${ctx.prefixes.join(' ') || '未配置'}`);
+  ctx.log.info(`已就绪 前缀可选 ${ctx.prefixes.join(' ') || '未配置'}`);
 }
 
 export function onUnload() {

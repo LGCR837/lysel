@@ -119,6 +119,7 @@ export interface PluginManifest {
 export interface GlobalConfig {
   logLevel: 'debug' | 'info' | 'warn' | 'error';
   commandPrefix: string;
+  /** 插件可选剥离的前缀，框架不强制 */
   prefixes: string[];
   consolePassword: string;
   webui: { enabled: boolean; host: string; port: number };
@@ -139,6 +140,7 @@ export interface PluginContext {
   readonly name: string;
   readonly account: AccountRef;
   readonly config: Readonly<Record<string, any>>;
+  /** 前缀可有可无，插件自行决定剥离 */
   readonly prefixes: readonly string[];
   readonly storage: PluginStorage;
   send(peer: Peer | MessageEvent, seg: SegmentInput): Promise<SendResult>;
