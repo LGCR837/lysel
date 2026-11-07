@@ -130,7 +130,8 @@ export class App {
   async saveAccountFromWeb(raw: AccountConfig): Promise<boolean> {
     if (!raw || !raw.id || !raw.platform) return false;
     const wasOnline = Boolean(this.adapters.get(raw.id)?.status().online);
-    saveAccountConfig(raw);
+    const plugins = this.accounts.get(raw.id)?.plugins ?? loadAccount(raw.id)?.plugins ?? {};
+    saveAccountConfig({ ...raw, plugins });
     await this.detachAccount(raw.id);
     const fresh = loadAccount(raw.id);
     if (fresh && fresh.enabled) await this.attachAccount(fresh, wasOnline);

@@ -6,6 +6,7 @@ import { createLogger, getLogs } from '../log.ts';
 
 const log = createLogger('webui');
 const WEBUI_DIR = path.dirname(fileURLToPath(import.meta.url));
+const BODY_LIMIT = 262144;
 
 export interface WebUiDeps {
   status: () => unknown;
@@ -38,22 +39,30 @@ function sendJson(res: http.ServerResponse, data: unknown, code = 200): void {
 function readBody(req: http.IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let raw = '';
+    let done = false;
     req.on('data', (chunk) => {
+      if (done) return;
       raw += chunk;
-      if (raw.length > 8192) reject(new Error('body too large'));
+      if (raw.length > BODY_LIMIT) {
+        done = true;
+        reject(new Error('请求体过大'));
+      }
     });
-    req.on('end', () => resolve(raw));
-    req.on('error', reject);
+    req.on('end', () => {
+      if (!done) resolve(raw);
+    });
+    req.on('error', (e) => {
+      if (!done) reject(e);
+    });
   });
 }
 
 async function jsonBody(req: http.IncomingMessage): Promise<Record<string, any>> {
-  try {
-    const parsed = JSON.parse((await readBody(req)) || '{}');
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+  const raw = (await readBody(req)).trim();
+  if (!raw) return {};
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object') throw new Error('请求体格式错误');
+  return parsed;
 }
 
 function serveAsset(res: http.ServerResponse, name: string): void {
@@ -67,7 +76,7 @@ function serveAsset(res: http.ServerResponse, name: string): void {
 }
 
 export function startWebUi(host: string, port: number, deps: WebUiDeps): http.Server {
-  const server = http.createServer(async (req, res) => {
+  const handle = async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     const pathname = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`).pathname;
 
     if (pathname === '/api/status') {
@@ -118,13 +127,9 @@ export function startWebUi(host: string, port: number, deps: WebUiDeps): http.Se
       return;
     }
     if (pathname === '/api/plugins/toggle' && req.method === 'POST') {
-      try {
-        const body = await jsonBody(req);
-        const ok = await deps.toggle(String(body.accountId ?? ''), String(body.name ?? ''), Boolean(body.enabled));
-        sendJson(res, { ok }, ok ? 200 : 400);
-      } catch (e: any) {
-        sendJson(res, { ok: false, message: e?.message ?? 'error' }, 400);
-      }
+      const body = await jsonBody(req);
+      const ok = await deps.toggle(String(body.accountId ?? ''), String(body.name ?? ''), Boolean(body.enabled));
+      sendJson(res, { ok }, ok ? 200 : 400);
       return;
     }
 
@@ -138,6 +143,16 @@ export function startWebUi(host: string, port: number, deps: WebUiDeps): http.Se
       return;
     }
     send(res, 404, 'not found', 'text/plain; charset=utf-8');
+  };
+
+  const server = http.createServer((req, res) => {
+    void handle(req, res).catch((e: any) => {
+      log.warn('请求处理失败', e?.message ?? e);
+      try {
+        if (!res.headersSent) sendJson(res, { ok: false, message: e?.message ?? 'error' }, 400);
+        else res.end();
+      } catch {}
+    });
   });
 
   server.listen(port, host, () => log.info(`WebUI http://${host}:${port}`));

@@ -19,6 +19,8 @@ let sigPlugins = '';
 let sigGlobal = '';
 const openPanels = new Set();
 let revealObserver = null;
+let firstPaint = true;
+let hintToken = 0;
 
 const PLATFORM_FIELDS = {
   oldchat: [
@@ -69,9 +71,10 @@ async function api(method, path, body) {
 function hint(id, text, ok = true) {
   const el = $(id);
   if (!el) return;
+  const token = ++hintToken;
   el.textContent = text;
   el.className = `hint is-shown ${ok ? 'is-ok' : 'is-error'}`;
-  setTimeout(() => { el.className = 'hint'; }, 4000);
+  setTimeout(() => { if (token === hintToken) el.className = 'hint'; }, 4000);
 }
 
 function setView(name) {
@@ -112,8 +115,9 @@ function rowLeft(name, sub) {
 }
 
 function renderAccounts(accounts) {
+  const cardCls = firstPaint ? 'account-card reveal' : 'account-card is-visible';
   $('account-cards').innerHTML = accounts.length
-    ? accounts.map((a, i) => `<article class="account-card reveal" data-delay="${Math.min(i + 1, 7)}">
+    ? accounts.map((a, i) => `<article class="${cardCls}" data-delay="${Math.min(i + 1, 7)}">
         <div class="account-card__head"><div><div class="account-card__id">${esc(a.id)}</div><div class="account-card__label">${esc(a.label)}</div></div><span class="tag ${a.online ? 'tag--pink' : 'tag--dim'}">${a.online ? '在线' : '离线'}</span></div>
         <dl class="account-card__body">
           <div><dt>PLATFORM</dt><dd>${esc(a.platform)}</dd></div>
@@ -132,6 +136,7 @@ function renderAccounts(accounts) {
 }
 
 function renderPlugins(plugins, accounts) {
+  const cardCls = firstPaint ? 'account-card reveal' : 'account-card is-visible';
   const tabs = [{ id: ALL, label: '全部' }].concat(accounts.map((a) => ({ id: a.id, label: a.id })));
   if (!tabs.some((t) => t.id === selectedAccount)) selectedAccount = ALL;
   $('plugin-tabs').innerHTML = tabs.map((t) => {
@@ -155,9 +160,9 @@ function renderPlugins(plugins, accounts) {
               </div>`;
             }).join('')
           : '<p class="empty">暂无账户</p>';
-        const cfgAccount = scoped[0] ?? '';
+        const cfgAccount = selectedAccount === ALL ? '' : selectedAccount;
         const cfgKey = `${cfgAccount}::${p.name}`;
-        return `<article class="account-card reveal" data-delay="${Math.min(i + 1, 7)}">
+        return `<article class="${cardCls}" data-delay="${Math.min(i + 1, 7)}">
           <div class="account-card__head"><div><div class="account-card__id">${esc(p.name)}</div><div class="account-card__label">v${esc(p.version)} · ${esc(p.description || '无说明')}</div></div><span class="plugin-card__state">${(p.enabled ?? []).filter((e) => e.enabled).length} 个账户启用</span></div>
           <div class="plugin-switches">${rows}</div>
           <div class="plugin-actions">
@@ -180,7 +185,7 @@ async function refillOpenPanels() {
   for (const card of document.querySelectorAll('#plugin-cards .account-card')) {
     const btn = card.querySelector('[data-action="plugin-config"]');
     const box = card.querySelector('.plugin-config');
-    if (!btn || !box || box.hidden) continue;
+    if (!btn || !btn.dataset.account || !box || box.hidden) continue;
     const res = await api('GET', `/api/plugins/config?accountId=${encodeURIComponent(btn.dataset.account)}&name=${encodeURIComponent(btn.dataset.plugin)}`);
     if (!box.hidden) renderPluginForm(box, res.data?.example ?? {}, res.data?.config ?? {});
   }
@@ -253,6 +258,7 @@ function renderStatus(data) {
   }
 
   renderSettings(data.config ?? {});
+  firstPaint = false;
 }
 
 async function loadStatus(btn, force) {
@@ -298,7 +304,6 @@ async function loadLogs() {
 }
 
 async function saveGlobalFromForm() {
-  const cfg = statusData?.config ?? {};
   const patch = {
     logLevel: $('cfg-logLevel').value,
     commandPrefix: $('cfg-commandPrefix').value,
@@ -307,7 +312,6 @@ async function saveGlobalFromForm() {
       host: $('cfg-host').value.trim(),
       port: Number($('cfg-port').value) || 7520,
     },
-    plugins: cfg.plugins ?? {},
   };
   const res = await api('PUT', '/api/config/global', patch);
   hint('global-hint', res.ok ? '已保存，端口改动需重启生效' : (res.status === 403 ? '密钥不正确' : '保存失败'), res.ok);
@@ -407,7 +411,7 @@ function openAccountEditor(mode, id) {
   accountEditorMode = mode;
   const panel = $('account-editor');
   const raw = mode === 'new'
-    ? { id: 'new-account', platform: 'onebot11', label: '新账户', enabled: true, adapter: {}, plugins: {} }
+    ? { id: '', platform: 'onebot11', label: '新账户', enabled: true, adapter: {}, plugins: {} }
     : (configData?.accounts ?? []).find((a) => a.id === id) ?? { id, platform: 'onebot11', enabled: true, adapter: {}, plugins: {} };
   accountDraft = JSON.parse(JSON.stringify(raw));
   panel.hidden = false;
